@@ -1,0 +1,44 @@
+{
+  "name": "hallucination-risk-electron",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "description": "Electron wrapper for the Streamlit Hallucination Risk web app",
+  "author": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.example.hallucinationrisk",
+    "productName": "Hallucination Risk",
+    "asar": true,
+    "directories": { "output": "../release" },
+    "files": [
+      "**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "backend",
+        "filter": [
+          "app/**",
+          "scripts/**",
+          "requirements.txt",
+          "launch/**",
+          "bin/**"
+        ]
+      }
+    ],
+    "mac": { "target": ["dmg", "zip"] },
+    "win": { "target": ["nsis", "zip"] },
+    "linux": { "target": ["AppImage", "deb", "zip"] }
+  }
+}

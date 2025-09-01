@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hallucination-risk"
+version = "0.1.0"
+description = "Closed-book hallucination risk checker (EDFL/B2T/ISR) with OpenAI backend"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["LLM", "hallucination", "risk", "EDFL", "OpenAI", "Streamlit"]
+authors = [ { name = "Hassana Labs" } ]
+license = { text = "MIT" }
+urls = { Homepage = "https://hassana.io" }
+dependencies = [
+  "openai>=1.0.0",
+  "streamlit>=1.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pyinstaller>=6.0.0",
+  "pytest>=7.0.0",
+  "ruff>=0.4.0",
+  "mypy>=1.4.0",
+]
+
+[project.scripts]
+hallrisk-cli = "app.cli.frontend:main"
+hallrisk-web = "app.web.web_app:main"
+hallrisk-launch = "app.launcher.entry:main"
+hallrisk-example = "app.examples.example:main"
+
+[tool.setuptools]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "scripts*"]

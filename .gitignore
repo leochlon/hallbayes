@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+
+# Node/Electron
+node_modules/
+electron/node_modules/
+
+# Build outputs
+release/
+bin/
+dist/
+
+# Env & logs
+.env
+*.log
+
