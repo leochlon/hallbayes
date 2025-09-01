@@ -459,8 +459,6 @@ for item, m in zip(items, metrics):
         print(f"Answer: {answer}")
 ```
 
----
-
 ## License
 
 This project is licensed under the MIT License — see the LICENSE file for details.
