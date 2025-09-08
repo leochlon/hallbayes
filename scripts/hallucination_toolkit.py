@@ -86,6 +86,89 @@ class OpenAIBackend:
             choices.append(resp.choices[0])
         return choices
 
+try:
+    from google import genai
+    from google.genai import types
+
+    class GoogleGenAIBackend:
+        @dataclass
+        class Message:
+            content: str
+
+        @dataclass
+        class LLMChoice:
+            message: GoogleGenAIBackend.Message
+
+        @dataclass
+        class LLMResponse:
+            choices: List[GoogleGenAIBackend.LLMChoice] = None
+
+        def __init__(
+                self,
+                model: str = "gemini-2.5-flash-lite",
+                api_key: Optional[str] = None,
+                project: Optional[str] = None,
+                location: Optional[str] = None,
+                request_timeout: float = 60.0,
+        ) -> None:
+            self.model = model
+            self.client = genai.Client(
+                vertexai=True,
+                project=project,
+                location=location,
+                api_key=api_key or os.environ.get("GEMINI_API_KEY"),
+            )
+            self.request_timeout = float(request_timeout)
+
+        def chat_create(self, messages: List[Dict], **kwargs):
+            # first message is the system prompt
+            system_prompt = messages[0]['content']
+            messages = [x['content'] for x in messages[1:]]
+            params = dict(
+                max_output_tokens=kwargs.get('max_tokens', 8),
+                temperature=kwargs.get('temperature', 0.7),
+                candidate_count=kwargs.get('n', 1),
+                system_instruction=system_prompt,
+            )
+            model = kwargs.get('model', self.model)
+
+            if "timeout" in kwargs:
+                params['http_options'] = {
+                    'timeout': kwargs['timeout'] * 1000
+                }
+
+            response = self.client.models.generate_content(
+                model=model,
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    **params
+                )
+            )
+            # Transform response to wrapper class to keep the rest of the code intact
+            result = GoogleGenAIBackend.LLMResponse(choices=[
+                GoogleGenAIBackend.LLMChoice(
+                    message=GoogleGenAIBackend.Message(content=r.content.parts[0].text)
+                )
+
+                for r in response.candidates])
+            return result
+
+        def multi_choice(self, messages: List[Dict], n: int = 1, **kwargs):
+            try:
+                resp = self.chat_create(messages, n=n, **kwargs)
+                choices = getattr(resp, "choices", None) or []
+                if len(choices) == n:
+                    return choices
+            except Exception as e:
+                pass
+            choices = []
+            for _ in range(n):
+                resp = self.chat_create(messages, **kwargs)
+                choices.append(resp.choices[0])
+            return choices
+except:
+    print(f"Warning: Google GenAI is not supported")
+
 
 # ------------------------------------------------------------------------------------
 # Core math (EDFL etc., nats)
