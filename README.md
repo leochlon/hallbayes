@@ -1,4 +1,4 @@
-# Hallucination Risk Calculator & Prompt Re-engineering Toolkit (OpenAI-only)
+# Hallucination Risk Calculator & Prompt Re-engineering Toolkit
 
 **Post-hoc calibration without retraining** for large language models. This toolkit turns a raw prompt into:  
 1) a **bounded hallucination risk** using the Expectation-level Decompression Law (EDFL), and  
@@ -9,7 +9,7 @@ It supports two deployment modes:
 - **Evidence-based:** prompts include *evidence/context*; rolling priors are built by erasing that evidence.
 - **Closed-book:** prompts have *no evidence*; rolling priors are built by semantic masking of entities/numbers/titles.
 
-All scoring relies **only** on the OpenAI Chat Completions API. No retraining required.
+All scoring relies **only** on the OpenAI/Google GenAI Chat Completions API. No retraining required.
 
 ---
 
@@ -34,6 +34,13 @@ export OPENAI_API_KEY=sk-...
 ```
 
 > The module uses `openai>=1.0.0` and the Chat Completions API (e.g., `gpt-4o`, `gpt-4o-mini`).
+
+Google GenAI support:
+
+```bash
+pip install --upgrade google-genai
+export GEMINI_API_KEY=...
+```
 
 ---
 
@@ -457,6 +464,20 @@ for item, m in zip(items, metrics):
     if m.decision_answer:
         answer = generate_answer_if_allowed(backend, item, m)
         print(f"Answer: {answer}")
+```
+
+### Google GenAI support:
+
+Replace the OpenAIBackend with the GoogleGenaiBackend:
+
+```python
+from scripts.hallucination_toolkit import GoogleGenAIBackend
+
+backend = GoogleGenAIBackend(model="gemini-2.5-flash-lite")
+
+planner = OpenAIPlanner(backend, temperature=0.3)
+
+...
 ```
 
 ## License
