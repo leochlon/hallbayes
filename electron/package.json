@@ -4,8 +4,8 @@
   "private": true,
   "main": "main.js",
   "description": "Electron wrapper for the Streamlit Hallucination Risk web app",
-  "author": "",
-  "license": "UNLICENSED",
+  "author": "Hassana Labs",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
@@ -15,10 +15,10 @@
     "electron": "^29.0.0",
     "electron-builder": "^24.6.4"
   },
-  "dependencies": {},
   "build": {
-    "appId": "com.example.hallucinationrisk",
+    "appId": "io.hassana.hallucinationrisk",
     "productName": "Hallucination Risk",
+    "copyright": "© 2025 Hassana Labs",
     "asar": true,
     "directories": { "output": "../release" },
     "files": [
@@ -42,3 +42,4 @@
     "linux": { "target": ["AppImage", "deb", "zip"] }
   }
 }
+

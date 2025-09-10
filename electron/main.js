@@ -70,7 +70,7 @@ function killProcessTree(child) {
   }
 }
 
-function waitForServer(url, timeoutMs = 60000, intervalMs = 500) {
+function waitForServer(url, timeoutMs = 120000, intervalMs = 500) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {
@@ -91,6 +91,7 @@ async function createWindow() {
   const win = new BrowserWindow({
     width: 1100,
     height: 760,
+    title: 'Hallucination Risk — Hassana Labs',
     webPreferences: {
       sandbox: true,
     }
@@ -124,3 +125,4 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+

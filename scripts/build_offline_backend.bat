@@ -4,13 +4,24 @@ cd /d "%~dp0\.."
 
 set PY=%PYTHON_BIN%
 if "%PY%"=="" set PY=python
+set VENV_DIR=%BUILD_VENV_DIR%
+if "%VENV_DIR%"=="" set VENV_DIR=.build-venv
 
-echo Using Python: %PY%
+echo Using bootstrap Python: %PY%
+echo Build venv: %VENV_DIR%
 
-%PY% -m pip install --upgrade pip wheel setuptools pyinstaller || goto :error
-%PY% -m pip install -r requirements.txt || goto :error
+if not exist "%VENV_DIR%" (
+  %PY% -m venv "%VENV_DIR%" || goto :error
+)
 
-pyinstaller --noconfirm --onefile scripts\backend_entry.py ^
+set VENV_PY="%VENV_DIR%\Scripts\python.exe"
+echo Using venv Python: %VENV_PY%
+
+%VENV_PY% -m pip install --upgrade pip wheel setuptools || goto :error
+%VENV_PY% -m pip install pyinstaller || goto :error
+%VENV_PY% -m pip install -r requirements.txt || goto :error
+
+%VENV_PY% -m PyInstaller --noconfirm --onefile scripts\backend_entry.py ^
   --add-data app;app ^
   --add-data scripts;scripts || goto :error
 

@@ -1,33 +1,36 @@
-Electron Wrapper
-================
+# Electron Desktop Wrapper
 
 This Electron app wraps the local Streamlit server for the Hallucination Risk UI.
 
-Dev prerequisites
-- Node.js 18+
-- Python 3.8+ (for the backend)
+## Dev
 
-Run (dev)
-```
+```bash
 cd electron
 npm install
 npm run start
 ```
 
-What happens
- - Electron spawns `python app/launcher/entry.py --port 8756 --headless` in the bundled backend directory.
-- It waits for `http://127.0.0.1:8756`, then opens a window to that URL.
-- On exit, it attempts to terminate the backend process tree.
- - First run creates a Python virtualenv under the Electron userData directory and installs requirements.
+By default it launches the backend on `http://127.0.0.1:8756` and opens a window.
 
-Build installers (optional)
-```
+## Build DMG (macOS)
+
+```bash
 cd electron
+npm install
+export CSC_IDENTITY_AUTO_DISCOVERY=false  # if you don't have signing set up
 npm run build
 ```
 
-This uses `electron-builder`. Configure signing/notarization as needed for your platform(s).
+Artifacts are created under `../release`.
 
-Notes
-- Packaging copies the required Python files into the app `resources/backend` directory.
-- The app downloads Python dependencies (streamlit/openai) on first launch; ensure internet access. For offline bundles, prepackage Python and site‑packages or use a frozen backend (PyInstaller) and adjust `main.js` to run it.
+## Offline backend (optional)
+
+Build the single-file backend to avoid pip installs at first run:
+
+```bash
+bash scripts/build_offline_backend.sh
+```
+
+Electron will use `bin/hallucination-backend` automatically if present; otherwise
+it will create a venv and run Streamlit via `app/launcher/entry.py`.
+

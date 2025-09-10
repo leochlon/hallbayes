@@ -68,8 +68,8 @@ class OpenAIBackend:
     def chat_create(self, messages: List[Dict], **kwargs):
         params = dict(model=self.model, messages=messages, max_tokens=8, temperature=0.7)
         params.update(kwargs)
-        if "timeout" in params:
-            params["request_timeout"] = params.pop("timeout")
+        # OpenAI >=1.0 client expects 'timeout', not 'request_timeout'
+        # Preserve any provided 'timeout' value as-is.
         return self.client.chat.completions.create(**params)
 
     def multi_choice(self, messages: List[Dict], n: int = 1, **kwargs):

@@ -9,13 +9,14 @@ __pycache__/
 # Node/Electron
 node_modules/
 electron/node_modules/
+.build-venv/
 
 # Build outputs
 release/
 bin/
 dist/
+build/
 
 # Env & logs
 .env
 *.log
-
