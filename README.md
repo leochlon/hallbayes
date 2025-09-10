@@ -1,45 +1,34 @@
 # Hallucination Risk Calculator & Toolkit
 
-**Post-hoc calibration for large language models without retraining.** This toolkit provides mathematically-grounded hallucination detection and controlled abstention using the Expectation-level Decompression Law (EDFL).
+**Post-hoc calibration for large language models without retraining.** Mathematically-grounded hallucination detection using the Expectation-level Decompression Law (EDFL), providing bounded risk guarantees and controlled abstention.
 
-## Key Features
+## Overview
 
-- **Bounded hallucination risk** with transparent mathematical guarantees
-- **Two decision modes**: Classical (binary) and Semantic (meaning-level)
-- **Two deployment modes**: Evidence-based and Closed-book
-- **No retraining required** - works with OpenAI Chat Completions API
-- **Concurrent processing** for improved performance
+This toolkit turns raw LLM prompts into:
+1. **Bounded hallucination risk** with transparent mathematical guarantees
+2. **Automated decisions** to ANSWER or REFUSE based on confidence thresholds
+3. **SLA certificates** for production deployments (Classic version)
 
-## Quick Start
+No model retraining required - works directly with OpenAI's Chat Completions API.
 
-```python
-from hallucination_toolkit_semantic_v2_4 import (
-    OpenAIChatBackend, SemanticPlanner, OpenAIItem
-)
+## Available Versions
 
-# Initialize backend and planner
-backend = OpenAIChatBackend(model="gpt-4o-mini", debug=True)
-planner = SemanticPlanner(
-    backend,
-    temperature=1.0,
-    top_p=0.9,
-    max_tokens_answer=48,
-    use_llr_top_meaning_budget=True,  # Recommended for v2.4
-    max_workers_skeletons=6,            # Parallel skeleton processing
-)
+### Classic (`scripts/hallucination_toolkit.py`)
+Full-featured production toolkit with binary decision model:
+- ✅ Complete aggregation and portfolio reporting
+- ✅ SLA certificate generation
+- ✅ Answer generation with safety checks
+- ✅ Evidence-based and closed-book modes
+- Simple, fast, production-ready
 
-# Evaluate a query
-items = [OpenAIItem(
-    prompt="Who won the Nobel Prize in Physics in 2014?",
-    M_full=10,
-    m_skeletons=6,
-    n_samples_per_skeleton=6
-)]
-
-metrics = planner.run(items, h_star=0.05, isr_threshold=1.0)
-print(f"Decision: {'ANSWER' if metrics[0].decision_answer else 'REFUSE'}")
-print(f"Risk bound: {metrics[0].roh_bound:.3f}")
-```
+### Semantic v2 - Experimental (`scripts/hallucination_toolkit_semantic.py`)
+Advanced meaning-level analysis with semantic entropy:
+- ✅ Bidirectional entailment clustering
+- ✅ Concurrent skeleton processing (6x faster)
+- ✅ Prior-sufficiency gate & posterior-dominance latch
+- ✅ Creative/Code mode with relaxed thresholds
+- ❌ No aggregation or SLA certificates
+- Research-oriented, better confabulation detection
 
 ## Installation
 
@@ -48,167 +37,308 @@ pip install --upgrade openai
 export OPENAI_API_KEY=sk-...
 ```
 
-## Core Concepts
+## Quick Start Examples
 
-### Mathematical Framework
-
-The toolkit uses the EDFL principle to bound hallucination risk:
-
-1. **Build rolling priors**: Create content-weakened versions of prompts (skeletons)
-2. **Compute information budget**: Δ̄ = average clipped log-likelihood ratio
-3. **Apply EDFL bound**: Hallucination risk ≤ 1 - p_max(Δ̄, q̄)
-4. **Gate decision**: Answer if ISR ≥ threshold and Δ̄ ≥ Bits-to-Trust
-
-### Deployment Modes
-
-#### Evidence-based Mode
-Use when prompts contain explicit evidence/context fields:
+### Classic Version with SLA Certificate
 
 ```python
-prompt = """Task: Answer based on evidence.
-Question: Who won the Nobel Prize in Physics in 2019?
-Evidence: James Peebles (1/2); Michel Mayor & Didier Queloz (1/2).
-"""
-item = OpenAIItem(prompt=prompt, skeleton_policy="evidence_erase")
-```
-
-#### Closed-book Mode
-Use for queries without explicit evidence:
-
-```python
-item = OpenAIItem(
-    prompt="Who won the 2019 Nobel Prize in Physics?",
-    skeleton_policy="closed_book"
+from scripts.hallucination_toolkit import (
+    OpenAIBackend, OpenAIItem, OpenAIPlanner,
+    make_sla_certificate, save_sla_certificate_json,
+    generate_answer_if_allowed
 )
-```
 
-### Decision Heads
+# Initialize
+backend = OpenAIBackend(model="gpt-4o-mini")
+planner = OpenAIPlanner(backend, temperature=0.3)
 
-#### Classical Head
-- Models binary event: Answer vs Refuse
-- Fast and robust
-- Best for simple gating decisions
+# Prepare items
+items = [
+    OpenAIItem(
+        prompt="Who won the 2019 Nobel Prize in Physics?",
+        n_samples=7,
+        m=6,
+        skeleton_policy="closed_book"
+    ),
+    OpenAIItem(
+        prompt="""Task: Answer based on the evidence.
+        Question: What is the speed of light?
+        Evidence: The speed of light in vacuum is 299,792,458 m/s.""",
+        n_samples=5,
+        m=6,
+        fields_to_erase=["Evidence"],
+        skeleton_policy="evidence_erase"
+    )
+]
 
-#### Semantic Head (v2.4)
-- Models distribution over meanings via clustering
-- Detects meaning-level uncertainty
-- Includes posterior-dominance latch for safety
-- Better at detecting confabulations
-
-## Configuration
-
-### Key Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `h_star` | 0.05 | Target max hallucination rate |
-| `isr_threshold` | 1.0 | Information sufficiency threshold |
-| `temperature` | 1.0 | Sampling temperature |
-| `M_full` | 10 | Samples for full prompt |
-| `m_skeletons` | 6 | Number of skeleton variants |
-| `n_samples_per_skeleton` | 6 | Samples per skeleton |
-| `max_workers_skeletons` | 6 | Parallel skeleton workers |
-| `use_llr_top_meaning_budget` | False | Use LLR for budget (recommended) |
-
-### Tuning for Different Use Cases
-
-**Strict Factual QA:**
-```python
-planner.run(items, h_star=0.02, isr_threshold=1.0)
-```
-
-**Creative/Code Generation:**
-```python
-planner.run(items, h_star=0.30, isr_threshold=0.8)
-```
-
-## API Reference
-
-### Core Classes
-
-**`OpenAIChatBackend`**
-```python
-backend = OpenAIChatBackend(
-    model="gpt-4o-mini",
-    api_key=None,  # Uses OPENAI_API_KEY env var
-    debug=False,
-    strict=False
+# Run evaluation
+metrics = planner.run(
+    items,
+    h_star=0.05,           # Target max 5% hallucination
+    isr_threshold=1.0,     # Information sufficiency threshold
+    margin_extra_bits=0.2, # Safety margin (nats)
+    B_clip=12.0,          # Clipping bound
+    clip_mode="one-sided" # Conservative clipping
 )
+
+# Generate report and SLA certificate
+report = planner.aggregate(
+    items, 
+    metrics, 
+    alpha=0.05,  # 95% confidence
+    h_star=0.05
+)
+
+cert = make_sla_certificate(report, model_name="GPT-4o-mini")
+save_sla_certificate_json(cert, "sla_certificate.json")
+
+print(f"Answer rate: {report.answer_rate:.1%}")
+print(f"Empirical hallucination: {report.empirical_hallucination_rate:.1%}" 
+      if report.empirical_hallucination_rate else "No labels")
+print(f"Worst-case RoH bound: {report.worst_item_roh_bound:.3f}")
+
+# Generate answers for allowed items
+for item, metric in zip(items, metrics):
+    if metric.decision_answer:
+        answer = generate_answer_if_allowed(backend, item, metric)
+        print(f"\nQ: {item.prompt[:50]}...")
+        print(f"A: {answer}")
+    else:
+        print(f"\n[REFUSED] {item.prompt[:50]}...")
 ```
 
-**`SemanticPlanner`**
+### Semantic Version (Experimental)
+
 ```python
+from scripts.hallucination_toolkit_semantic import (
+    OpenAIChatBackend, SemanticPlanner, OpenAIItem
+)
+
+# Initialize with semantic features
+backend = OpenAIChatBackend(model="gpt-4o-mini", debug=True)
 planner = SemanticPlanner(
     backend,
     temperature=1.0,
     top_p=0.9,
     max_tokens_answer=48,
-    use_llr_top_meaning_budget=True,
-    max_workers_skeletons=6,
+    use_llr_top_meaning_budget=True,  # Recommended
+    max_workers_skeletons=6,           # Parallel processing
     kl_smoothing_eps=1e-2
 )
-```
 
-**`OpenAIItem`**
-```python
-item = OpenAIItem(
-    prompt="Your question here",
+# Standard factual query
+factual_item = OpenAIItem(
+    prompt="Who won the Nobel Prize in Physics in 2014?",
     M_full=10,
     m_skeletons=6,
-    n_samples_per_skeleton=6,
-    skeleton_policy="auto"  # "auto", "evidence_erase", or "closed_book"
+    n_samples_per_skeleton=6
+)
+
+# Creative/Code mode example
+code_item = OpenAIItem(
+    prompt="Write a Python function to calculate fibonacci numbers",
+    M_full=16,  # More samples for style variation
+    m_skeletons=6,
+    n_samples_per_skeleton=4
+)
+
+# Run evaluations
+factual_metrics = planner.run([factual_item], h_star=0.05, isr_threshold=1.0)
+code_metrics = planner.run([code_item], h_star=0.30, isr_threshold=0.8)  # Relaxed for code
+
+# Display semantic analysis
+for metric in factual_metrics:
+    print(f"Decision: {'ANSWER' if metric.decision_answer else 'REFUSE'}")
+    print(f"Top meaning: {metric.top_meaning}")
+    print(f"Posterior confidence: {metric.P_full_top:.1%}")
+    print(f"Semantic entropy: {metric.H_sem:.3f}")
+    print(f"RoH bound: {metric.roh_bound:.3f}")
+```
+
+## Core Concepts
+
+### Mathematical Framework
+
+The toolkit implements the EDFL (Expectation-level Decompression Law) framework:
+
+1. **Rolling Priors**: Create weakened versions of prompts (skeletons)
+2. **Information Budget**: Δ̄ = average clipped log-likelihood ratio between full and skeleton prompts
+3. **Bits-to-Trust**: B2T = KL(Ber(1-h*) || Ber(q_lo)) - information needed for target reliability
+4. **Decision Gate**: Answer if ISR = Δ̄/B2T ≥ threshold AND Δ̄ ≥ B2T + margin
+
+### Deployment Modes
+
+#### Evidence-based
+For prompts with explicit context/evidence fields:
+```python
+item = OpenAIItem(
+    prompt="Question: X\nEvidence: Y\nAnswer based on evidence.",
+    fields_to_erase=["Evidence"],
+    skeleton_policy="evidence_erase"
 )
 ```
 
-### Output Metrics
-
-`ItemMetrics` contains:
-- `decision_answer`: Boolean - whether to answer
-- `delta_bar`: Information budget (nats)
-- `roh_bound`: EDFL hallucination risk bound
-- `H_sem`: Semantic entropy
-- `P_full_top`: Top meaning posterior probability
-- `isr`: Information Sufficiency Ratio
-- `rationale`: Human-readable explanation
-
-## Advanced Usage
-
-### Parallel Processing
+#### Closed-book
+For prompts without evidence, using semantic masking:
 ```python
-# Process multiple items concurrently
+item = OpenAIItem(
+    prompt="What happened in Paris in 1889?",
+    skeleton_policy="closed_book"  # Masks entities, dates, numbers
+)
+```
+
+#### Creative/Code Mode (Semantic only)
+Relaxed thresholds for non-factual tasks:
+```python
+# Set h_star=0.30 (70% confidence) instead of 0.05 (95%)
+# Still blocks fabricated facts about real entities
+metrics = planner.run(items, h_star=0.30, isr_threshold=0.8)
+```
+
+## Feature Comparison
+
+| Feature | Classic | Semantic v2 |
+|---------|---------|-------------|
+| **Core Model** | Binary (Answer/Refuse) | Meaning clusters |
+| **Semantic Entropy** | ❌ | ✅ |
+| **Concurrent Processing** | ❌ | ✅ (6x faster) |
+| **Aggregation Reports** | ✅ | ❌ |
+| **SLA Certificates** | ✅ | ❌ |
+| **Answer Generation** | ✅ | ❌ |
+| **Creative/Code Mode** | Limited | ✅ Full support |
+| **Prior-Sufficiency Gate** | ❌ | ✅ |
+| **Best For** | Production, compliance | Research, complex QA |
+
+## Configuration Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `h_star` | 0.05 | Target max hallucination rate (0.05 = 5%) |
+| `isr_threshold` | 1.0 | Information sufficiency ratio threshold |
+| `margin_extra_bits` | 0.2 | Additional safety margin (nats) |
+| `temperature` | 0.3-1.0 | Sampling temperature (lower = more stable) |
+| `m` / `m_skeletons` | 6 | Number of skeleton variants |
+| `n_samples` | 5-7 | Samples per skeleton (Classic) |
+| `M_full` | 10 | Full prompt samples (Semantic) |
+| `B_clip` | 12.0 | Clipping bound for Δ̄ computation |
+
+### Tuning Guidelines
+
+**Strict Factual QA**: 
+- `h_star=0.02-0.05` (98-95% reliability)
+- `temperature=0.3`
+- Higher sample counts
+
+**Creative/Code Generation**:
+- `h_star=0.20-0.40` (80-60% reliability)  
+- `temperature=0.8-1.0`
+- Constrain output format to reduce variation
+
+**High Abstention Rate?**
+- Increase `n_samples` for stability
+- Reduce `margin_extra_bits`
+- Check if skeletons are sufficiently weakened
+
+## API Reference
+
+### Classic Version
+
+```python
+# Backend
+backend = OpenAIBackend(model="gpt-4o-mini", api_key=None)
+
+# Item
+item = OpenAIItem(
+    prompt="...",
+    n_samples=7,
+    m=6,
+    skeleton_policy="auto",  # "auto", "evidence_erase", "closed_book"
+    fields_to_erase=["Evidence"],  # For evidence mode
+)
+
+# Planner
+planner = OpenAIPlanner(backend, temperature=0.3, q_floor=None)
+metrics = planner.run(items, h_star=0.05, isr_threshold=1.0)
+report = planner.aggregate(items, metrics, alpha=0.05)
+
+# SLA Certificate
+cert = make_sla_certificate(report, model_name="gpt-4o-mini")
+save_sla_certificate_json(cert, "path.json")
+
+# Answer Generation
+answer = generate_answer_if_allowed(backend, item, metric)
+```
+
+### Semantic Version
+
+```python
+# Backend with logprobs
+backend = OpenAIChatBackend(
+    model="gpt-4o-mini",
+    debug=True,
+    strict=False
+)
+
+# Planner with semantic features
+planner = SemanticPlanner(
+    backend,
+    entailer=None,  # Auto-creates OpenAILLMEntailer
+    temperature=1.0,
+    use_llr_top_meaning_budget=True,
+    max_workers_skeletons=6,
+    max_entail_calls=120
+)
+
+# Item with semantic parameters
+item = OpenAIItem(
+    prompt="...",
+    M_full=10,
+    m_skeletons=6,
+    n_samples_per_skeleton=6
+)
+
+# Run with parallel item processing
 metrics = planner.run(items, h_star=0.05, max_workers_items=8)
 ```
 
-### Custom Entailment Provider
-```python
-from hallucination_toolkit_semantic_v2_4 import OpenAILLMEntailer
+## Output Metrics
 
-entailer = OpenAILLMEntailer(backend, request_timeout=15.0)
-planner = SemanticPlanner(backend, entailer=entailer)
-```
+Both versions return `ItemMetrics` with:
+- `decision_answer`: Boolean (ANSWER/REFUSE)
+- `delta_bar`: Information budget (nats)  
+- `roh_bound`: EDFL hallucination risk bound
+- `isr`: Information Sufficiency Ratio
+- `q_conservative`: Worst-case prior
+- `rationale`: Human-readable explanation
+
+Semantic version adds:
+- `H_sem`: Semantic entropy over meanings
+- `P_full_top`: Top meaning posterior probability
+- `top_meaning`: Representative answer for top cluster
 
 ## Performance Characteristics
 
-| Metric | Typical Value | Notes |
-|--------|--------------|-------|
-| Latency per item | 2-5 seconds | With default settings |
-| API calls | (1+m) × ⌈n/batch⌉ | Can be parallelized |
-| Cost | ~$0.01-0.03 per item | Using gpt-4o-mini |
+| Metric | Classic | Semantic |
+|--------|---------|----------|
+| Latency/item | 2-3 sec | 2-5 sec |
+| API calls | (1+m)×n | (1+m)×n + entailment |
+| Cost/item | $0.01-0.02 | $0.02-0.04 |
+| Parallelism | No | Yes (6x speedup) |
 
 ## Troubleshooting
 
-**Low Δ̄ (frequent abstentions):**
-- Increase `n_samples_per_skeleton` for stability
-- Lower `temperature` to 0.3-0.5
-- Check if skeletons are sufficiently weakened
+**High abstention rate:**
+- Classic: Increase `n_samples`, lower `temperature`
+- Semantic: Increase `M_full`, check if `P_full_top` is low
 
 **Prior collapse (q_lo → 0):**
-- Apply Laplace smoothing (default: 1/(n+2))
-- Reduce masking strength for closed-book mode
+- Apply Laplace smoothing: `q_floor=1/(n+2)`
+- Reduce masking strength in closed-book mode
 
-**Arithmetic queries abstaining:**
-- Switch to correctness event instead of answer/refuse
-- Provide worked examples as evidence
+**Creative tasks abstaining:**
+- Use Semantic version with `h_star=0.30`
+- Constrain output format in prompt
+- Add skip-list for technical terms
 
 ## Web Interface
 
@@ -216,11 +346,19 @@ planner = SemanticPlanner(backend, entailer=entailer)
 streamlit run app/web/web_app.py
 ```
 
-The web interface provides:
+Provides:
 - Engine selection (Classic vs Semantic)
-- Interactive parameter tuning
+- Interactive parameter tuning  
 - Real-time risk visualization
-- Export of SLA certificates
+- SLA certificate export (Classic only)
+
+## Contributing
+
+We welcome contributions, criticisms, and real-world deployment experiences. Areas of interest:
+- Alternative clustering methods
+- Multi-model support beyond OpenAI
+- Optimized skeleton generation strategies
+- Production deployment case studies
 
 ## License
 
