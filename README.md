@@ -402,6 +402,47 @@ Creates `bin/hallucination-backend[.exe]` with bundled Python, Streamlit, and de
 
 ---
 
+## New Utility Tools
+
+### Quick Evaluation CLI
+
+For rapid testing and evaluation:
+
+```bash
+# Evaluate a single prompt
+python scripts/quick_eval.py "What is the capital of France?"
+
+# Interactive mode
+python scripts/quick_eval.py --interactive
+
+# Batch process from file
+python scripts/quick_eval.py --file prompts.txt --output results.json
+
+# Use permissive settings
+python scripts/quick_eval.py --permissive "Complex question here"
+```
+
+### Batch Processing Example
+
+See `app/examples/batch_example.py` for a comprehensive example of:
+- Processing multiple prompts
+- Comparing different configurations
+- Generating detailed reports
+- Exporting results to JSON/CSV
+
+```bash
+python app/examples/batch_example.py
+```
+
+### Utility Functions
+
+The `scripts/utils.py` module provides helper functions:
+- `print_summary()` - formatted result summaries
+- `save_results_to_json/csv()` - export capabilities
+- `create_comparison_report()` - compare different runs
+- `validate_openai_setup()` - check API configuration
+- `create_batch_from_prompts()` - easy batch creation
+
 ## Minimal End-to-End Example
 
 ```python
