@@ -1,0 +1,62 @@
+name: SLSA Provenance
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    outputs:
+      subjects_handle: ${{ steps.subjects.outputs.handle }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build artifacts
+        run: |
+          python -m pip install -U pip build
+          python -m build
+      - name: Create SLSA subjects file
+        run: |
+          python - <<'PY'
+          import base64
+          import hashlib
+          from pathlib import Path
+
+          dist = Path("dist")
+          lines = []
+          for path in sorted(dist.iterdir()):
+              if not path.is_file():
+                  continue
+              if path.name in {"subjects.txt", "subjects.base64"}:
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              lines.append(f"{digest} {path.name}")
+          subjects = "\n".join(lines).encode("utf-8")
+          dist.joinpath("subjects.txt").write_bytes(subjects)
+          dist.joinpath("subjects.base64").write_text(base64.b64encode(subjects).decode("ascii"))
+          PY
+      - name: Encode subjects for generator
+        id: subjects
+        uses: slsa-framework/slsa-github-generator/actions/generator/generic/create-base64-subjects-from-file@v2.1.0
+        with:
+          path: dist/subjects.base64
+
+  provenance:
+    needs: build
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects-as-file: ${{ needs.build.outputs.subjects_handle }}
+      provenance-name: berry.intoto.jsonl
+      upload-assets: true
+      private-repository: false

@@ -1,0 +1,13 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.tmp_test_home/
+*.egg-info/
+build/
+dist/
+*.log
+.pdf_screens/
+.tmp_arxiv/
+.venv-pdf/

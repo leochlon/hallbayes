@@ -1,0 +1,246 @@
+name: Release macOS (.pkg) + Homebrew cask
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-pkg:
+    # ARM64 only for now (Intel runners require paid billing)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e ".[dev]"
+          python -m pip install -U pyinstaller
+
+      - name: Test
+        run: |
+          pytest
+
+      - name: Resolve version
+        id: meta
+        run: |
+          VERSION_PY="$(python - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path("pyproject.toml").read_text(encoding="utf-8")
+          m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+          if not m:
+              raise SystemExit("version not found in pyproject.toml")
+          print(m.group(1))
+          PY
+          )"
+          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+            VERSION_TAG="${GITHUB_REF_NAME#v}"
+            if [[ "$VERSION_TAG" != "$VERSION_PY" ]]; then
+              echo "Tag version ($VERSION_TAG) does not match pyproject version ($VERSION_PY)" >&2
+              exit 1
+            fi
+            VERSION="$VERSION_TAG"
+          else
+            VERSION="$VERSION_PY"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Detect signing / notarization config
+        id: signing
+        env:
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          APPLE_APP_CERT_P12_BASE64: ${{ secrets.APPLE_APP_CERT_P12_BASE64 }}
+          APPLE_APP_CERT_P12_PASSWORD: ${{ secrets.APPLE_APP_CERT_P12_PASSWORD }}
+          APPLE_APP_SIGN_IDENTITY: ${{ secrets.APPLE_APP_SIGN_IDENTITY }}
+          APPLE_INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          APPLE_INSTALLER_CERT_P12_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_P12_PASSWORD }}
+          APPLE_INSTALLER_SIGN_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGN_IDENTITY }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          can_sign=true
+          for k in \
+            APPLE_KEYCHAIN_PASSWORD \
+            APPLE_APP_CERT_P12_BASE64 \
+            APPLE_APP_CERT_P12_PASSWORD \
+            APPLE_APP_SIGN_IDENTITY \
+            APPLE_INSTALLER_CERT_P12_BASE64 \
+            APPLE_INSTALLER_CERT_P12_PASSWORD \
+            APPLE_INSTALLER_SIGN_IDENTITY
+          do
+            if [[ -z "${!k:-}" ]]; then
+              can_sign=false
+            fi
+          done
+          echo "can_sign=$can_sign" >> "$GITHUB_OUTPUT"
+
+          can_notarize="$can_sign"
+          for k in \
+            APPLE_NOTARY_KEY_P8_BASE64 \
+            APPLE_NOTARY_KEY_ID \
+            APPLE_NOTARY_ISSUER_ID
+          do
+            if [[ -z "${!k:-}" ]]; then
+              can_notarize=false
+            fi
+          done
+          echo "can_notarize=$can_notarize" >> "$GITHUB_OUTPUT"
+
+          if [[ "$can_sign" != "true" ]]; then
+            echo "Signing disabled (missing Apple signing secrets)."
+          fi
+          if [[ "$can_notarize" != "true" ]]; then
+            echo "Notarization disabled (missing App Store Connect notarization secrets)."
+          fi
+
+      - name: Import Apple signing certificates
+        if: steps.signing.outputs.can_sign == 'true'
+        env:
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          APPLE_APP_CERT_P12_BASE64: ${{ secrets.APPLE_APP_CERT_P12_BASE64 }}
+          APPLE_APP_CERT_P12_PASSWORD: ${{ secrets.APPLE_APP_CERT_P12_PASSWORD }}
+          APPLE_INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          APPLE_INSTALLER_CERT_P12_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_P12_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/berry-signing.keychain-db"
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Add custom keychain to search list (put it first, keep login keychain)
+          security list-keychains -d user -s "$KEYCHAIN" ~/Library/Keychains/login.keychain-db
+
+          echo "$APPLE_APP_CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/app.p12"
+          security import "$RUNNER_TEMP/app.p12" \
+            -k "$KEYCHAIN" \
+            -P "$APPLE_APP_CERT_P12_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+
+          echo "$APPLE_INSTALLER_CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/installer.p12"
+          security import "$RUNNER_TEMP/installer.p12" \
+            -k "$KEYCHAIN" \
+            -P "$APPLE_INSTALLER_CERT_P12_PASSWORD" \
+            -T /usr/bin/productsign \
+            -T /usr/bin/security
+
+          # Ensure the Developer ID G2 intermediate is available for chain building.
+          openssl x509 -in scripts/apple_certs/developer_id_ca_g2.pem -outform der -out "$RUNNER_TEMP/developer_id_ca_g2.cer"
+          security import "$RUNNER_TEMP/developer_id_ca_g2.cer" -k "$KEYCHAIN" -T /usr/bin/codesign -T /usr/bin/productsign -T /usr/bin/security || true
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+
+          # Debug: show available identities
+          echo "Available codesigning identities:"
+          security find-identity -v -p codesigning
+
+      - name: Build signed pkg
+        id: pkg
+        env:
+          BERRY_VERSION: ${{ steps.meta.outputs.version }}
+          BERRY_PKG_IDENTIFIER: com.hassana.berry
+          APPLE_APP_SIGN_IDENTITY: ${{ secrets.APPLE_APP_SIGN_IDENTITY }}
+          APPLE_INSTALLER_SIGN_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGN_IDENTITY }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          if [[ "${{ steps.signing.outputs.can_sign }}" != "true" ]]; then
+            unset APPLE_APP_SIGN_IDENTITY
+            unset APPLE_INSTALLER_SIGN_IDENTITY
+          fi
+          if [[ "${{ steps.signing.outputs.can_notarize }}" != "true" ]]; then
+            unset APPLE_NOTARY_KEY_P8_BASE64
+            unset APPLE_NOTARY_KEY_ID
+            unset APPLE_NOTARY_ISSUER_ID
+          fi
+          bash scripts/build_macos_pkg.sh
+
+      - name: Validate pkg install (smoke test)
+        run: |
+          bash scripts/validate_macos_pkg.sh "${{ steps.pkg.outputs.pkg_path }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: berry-pkg-arm64
+          path: ${{ steps.pkg.outputs.pkg_path }}
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build-pkg]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compute checksums
+        id: sums
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARM_PKG="$(find artifacts -type f -name "*-macos-arm64.pkg" | head -n1)"
+          if [[ -z "$ARM_PKG" ]]; then
+            echo "Missing ARM64 pkg artifact" >&2
+            find artifacts -type f -maxdepth 4 -print >&2 || true
+            exit 1
+          fi
+          SHA_ARM="$(sha256sum "$ARM_PKG" | awk '{print $1}')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha_arm64=$SHA_ARM" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Homebrew cask file
+        run: |
+          python scripts/render_homebrew_cask.py \
+            --version "${{ steps.sums.outputs.version }}" \
+            --sha256-arm64 "${{ steps.sums.outputs.sha_arm64 }}" \
+            --identifier "com.hassana.berry" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out "berry.rb"
+
+      - name: Create / update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.pkg
+            berry.rb
+          generate_release_notes: true
+
+      - name: Update Homebrew tap cask (optional)
+        if: vars.HOMEBREW_TAP_ENABLED == 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/hassana-labs/homebrew-tap.git" tap
+          python scripts/render_homebrew_cask.py \
+            --version "${{ steps.sums.outputs.version }}" \
+            --sha256-arm64 "${{ steps.sums.outputs.sha_arm64 }}" \
+            --identifier "com.hassana.berry" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out "tap/Casks/berry.rb"
+          cd tap
+          git config user.name "Berry Bot"
+          git config user.email "bot@hassana.ai"
+          git add Casks/berry.rb
+          if git diff --cached --quiet; then
+            echo "No cask changes."
+            exit 0
+          fi
+          git commit -m "berry ${{ steps.sums.outputs.version }}"
+          git push origin HEAD:main

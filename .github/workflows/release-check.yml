@@ -1,0 +1,59 @@
+name: Release Check
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  goreleaser-dry-run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build dist
+        run: |
+          python -m pip install -U pip build
+          python -m build
+      - name: Resolve version
+        id: version
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          text = Path("pyproject.toml").read_text(encoding="utf-8")
+          match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+          if not match:
+              raise SystemExit("version not found")
+          version = match.group(1)
+          output = os.environ.get("GITHUB_OUTPUT")
+          if output:
+              with open(output, "a", encoding="utf-8") as f:
+                  f.write(f"version={version}\\n")
+          else:
+              print(version)
+          PY
+      - name: GoReleaser config check
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: v2.13.3
+          args: check
+      - name: GoReleaser dry run (tag)
+        if: github.ref_type == 'tag'
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: v2.13.3
+          args: release --skip=publish --clean
+      - name: GoReleaser dry run (snapshot)
+        if: github.ref_type != 'tag'
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: v2.13.3
+          args: release --skip=publish,winget,scoop,homebrew --clean --snapshot
