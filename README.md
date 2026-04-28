@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/leochlon-hallbayes-badge.png)](https://mseep.ai/app/leochlon-hallbayes)
+
 # Berry
 
 ## Workflow verification playbooks
