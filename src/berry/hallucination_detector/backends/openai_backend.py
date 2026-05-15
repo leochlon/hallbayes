@@ -116,31 +116,29 @@ def call_text_chat(
             choice = resp.choices[0]
             out_text = choice.message.content or ""
 
-            out_logprobs = None
-            if (
-                include_logprobs
-                and getattr(choice, "logprobs", None)
-                and getattr(choice.logprobs, "content", None)
-            ):
-                out_logprobs = []
-                for token_info in choice.logprobs.content:
-                    token_data = {
-                        "token": token_info.token,
-                        "logprob": token_info.logprob,
-                    }
-                    if token_info.top_logprobs:
-                        token_data["top_logprobs"] = [
-                            {"token": t.token, "logprob": t.logprob}
-                            for t in token_info.top_logprobs
-                        ]
-                    out_logprobs.append(token_data)
-
-            if include_logprobs and out_logprobs is None:
-                logger.warning(
-                    "OpenAI backend at base_url=%r returned no logprobs despite logprobs=true; "
-                    "downstream calibration will degrade. Verify the server supports logprobs.",
-                    base_url,
-                )
+            out_logprobs: Optional[list] = None
+            if include_logprobs:
+                raw_lp = getattr(choice, "logprobs", None)
+                raw_content = getattr(raw_lp, "content", None) if raw_lp else None
+                if raw_content:
+                    out_logprobs = []
+                    for token_info in raw_content:
+                        token_data: Dict[str, Any] = {
+                            "token": token_info.token,
+                            "logprob": token_info.logprob,
+                        }
+                        if token_info.top_logprobs:
+                            token_data["top_logprobs"] = [
+                                {"token": t.token, "logprob": t.logprob}
+                                for t in token_info.top_logprobs
+                            ]
+                        out_logprobs.append(token_data)
+                else:
+                    logger.warning(
+                        "OpenAI backend at base_url=%r returned no logprobs despite logprobs=true; "
+                        "downstream calibration will degrade. Verify the server supports logprobs.",
+                        base_url,
+                    )
             return TextResult(
                 text=str(out_text), response_id=getattr(resp, "id", None), logprobs=out_logprobs
             )

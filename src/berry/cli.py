@@ -7,7 +7,7 @@ import os
 import sys
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from . import __version__
 from .audit import export_events, prune_events
@@ -275,7 +275,7 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     api_key = (env.get("OPENAI_API_KEY") or "").strip()
 
     t0 = time.monotonic()
-    http_status = "n/a"
+    http_status: Any = "n/a"
     logprobs_populated = False
     top_logprobs_nonempty = False
     err: Optional[str] = None
@@ -289,10 +289,10 @@ def cmd_doctor(_: argparse.Namespace) -> int:
             if backend == "openai" and not api_key:
                 raise RuntimeError("OPENAI_API_KEY missing")
             effective_key = api_key or "not-needed"
-            kwargs = {"api_key": effective_key, "timeout": 30}
+            client_kwargs: dict[str, Any] = {"api_key": effective_key, "timeout": 30}
             if base_url:
-                kwargs["base_url"] = base_url
-            client = OpenAI(**kwargs)
+                client_kwargs["base_url"] = base_url
+            client = OpenAI(**client_kwargs)
             resp = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],

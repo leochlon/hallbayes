@@ -32,7 +32,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -672,7 +672,7 @@ def create_server(
             try:
                 return run_detect_hallucination(
                     answer=str(answer or ""),
-                    spans=list(spans or []),
+                    spans=cast(List[Dict[str, str]], list(spans or [])),
                     verifier_model=str(verifier_model or _default_verifier_model()),
                     default_target=float(default_target or 0.95),
                     max_claims=int(max_claims or 25),
@@ -712,7 +712,7 @@ def create_server(
             try:
                 return run_audit_trace_budget(
                     steps=list(steps or []),
-                    spans=list(spans or []),
+                    spans=cast(List[Dict[str, str]], list(spans or [])),
                     verifier_model=str(verifier_model or _default_verifier_model()),
                     default_target=float(default_target or 0.95),
                     require_citations=bool(require_citations),

@@ -78,9 +78,6 @@ def _normalize_spans(spans: List[Dict[str, str]]) -> List[Span]:
     skipped: List[str] = []
     raw = spans or []
     for i, s in enumerate(raw):
-        if not isinstance(s, dict):
-            skipped.append(f"index {i}: not a dict (got {type(s).__name__})")
-            continue
         sid = str(s.get("sid", "") or "").strip()
         text = ""
         for k in _SPAN_TEXT_FALLBACK_KEYS:
