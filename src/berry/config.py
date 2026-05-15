@@ -75,6 +75,11 @@ class BerryConfig:
     # Product flags (paid layer)
     paid_features_enabled: bool = False
 
+    # Verifier backend (used by hallucination/verification calls)
+    verifier_backend: str = "openai"  # choices: openai, gemini, vertex, local
+    verifier_model: Optional[str] = None  # resolved at call time if None
+    local_base_url: str = "http://127.0.0.1:1234/v1"
+
 
 def _load_json(path: Path) -> Dict[str, Any]:
     try:
@@ -123,6 +128,13 @@ def _coerce(cfg: Dict[str, Any]) -> BerryConfig:
         audit_log_enabled=bool(cfg.get("audit_log_enabled", True)),
         audit_log_retention_days=int(cfg.get("audit_log_retention_days", 30)),
         paid_features_enabled=bool(cfg.get("paid_features_enabled", False)),
+        verifier_backend=str(cfg.get("verifier_backend", "openai")),
+        verifier_model=(
+            None
+            if cfg.get("verifier_model") in {None, ""}
+            else str(cfg.get("verifier_model"))
+        ),
+        local_base_url=str(cfg.get("local_base_url", "http://127.0.0.1:1234/v1")),
     )
 
 
@@ -161,6 +173,18 @@ def load_config(project_root: Optional[Path] = None) -> BerryConfig:
     env_exec_net = os.environ.get("BERRY_EXEC_NETWORK_MODE")
     if env_exec_net is not None and env_exec_net.strip() != "":
         cfg = replace(cfg, exec_network_mode=str(env_exec_net).strip())
+
+    env_verifier_backend = os.environ.get("BERRY_VERIFIER_BACKEND")
+    if env_verifier_backend is not None and env_verifier_backend.strip() != "":
+        cfg = replace(cfg, verifier_backend=str(env_verifier_backend).strip())
+
+    env_verifier_model = os.environ.get("BERRY_VERIFIER_MODEL")
+    if env_verifier_model is not None and env_verifier_model.strip() != "":
+        cfg = replace(cfg, verifier_model=str(env_verifier_model).strip())
+
+    env_local_base_url = os.environ.get("BERRY_LOCAL_BASE_URL")
+    if env_local_base_url is not None and env_local_base_url.strip() != "":
+        cfg = replace(cfg, local_base_url=str(env_local_base_url).strip())
 
     return cfg
 

@@ -14,6 +14,30 @@ _DEFAULT_CITE_RE = re.compile(r"\[(?P<id>[A-Za-z]\w*|\d+)\]")
 
 _LN2 = math.log(2.0)
 
+_NO_LOGPROBS_MARKERS = (
+    "logprobs is None",
+    "empty logprobs list",
+    "missing logprob for generated token",
+)
+
+
+def _no_logprobs_verdict() -> Dict[str, Any]:
+    return {
+        "flagged": True,
+        "under_budget": True,
+        "error": (
+            "Backend did not return logprobs - Berry requires top_logprobs "
+            "support. Check backend."
+        ),
+        "error_type": "no_logprobs_from_backend",
+        "details": [],
+    }
+
+
+def _is_no_logprobs_error(exc: BaseException) -> bool:
+    msg = str(exc) or ""
+    return any(marker in msg for marker in _NO_LOGPROBS_MARKERS)
+
 
 @dataclass
 class Span:
@@ -39,13 +63,44 @@ def _to_bits(nats: float) -> float:
     return float(nats) / _LN2
 
 
+_SPAN_TEXT_FALLBACK_KEYS = ("text", "snippet", "content", "body", "passage")
+
+
 def _normalize_spans(spans: List[Dict[str, str]]) -> List[Span]:
+    """Coerce loose MCP span dicts into Span objects.
+
+    - Auto-assigns ``sid`` as ``s{i+1}`` when caller omitted it (1-indexed).
+    - Accepts text under fallback keys: text, snippet, content, body, passage.
+    - Silently skips entries with no usable text; raises ``ValueError`` with a
+      concrete diagnostic if a non-empty input list yields zero valid spans
+      (so the caller can distinguish malformed input from empty input).
+    """
     out: List[Span] = []
-    for s in spans or []:
-        sid = str(s.get("sid", "")).strip()
-        text = str(s.get("text", "")).strip()
-        if sid and text:
-            out.append(Span(sid=sid, text=text))
+    skipped: List[str] = []
+    raw = spans or []
+    for i, s in enumerate(raw):
+        if not isinstance(s, dict):
+            skipped.append(f"index {i}: not a dict (got {type(s).__name__})")
+            continue
+        sid = str(s.get("sid", "") or "").strip()
+        text = ""
+        for k in _SPAN_TEXT_FALLBACK_KEYS:
+            v = s.get(k)
+            if v is None:
+                continue
+            cand = str(v).strip()
+            if cand:
+                text = cand
+                break
+        if not text:
+            present = sorted(k for k in s.keys() if k != "sid")
+            skipped.append(f"index {i}: no usable text (keys present: {present or 'none'}; expected one of {list(_SPAN_TEXT_FALLBACK_KEYS)})")
+            continue
+        if not sid:
+            sid = f"s{i+1}"
+        out.append(Span(sid=sid, text=text))
+    if raw and not out:
+        raise ValueError("All spans malformed: " + "; ".join(skipped))
     return out
 
 
@@ -197,12 +252,22 @@ def run_detect_hallucination(
     pool_json_path: Optional[str] = None,
     local_llm_model_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    span_objs = _normalize_spans(spans)
+    try:
+        span_objs = _normalize_spans(spans)
+    except ValueError as e:
+        return {
+            "flagged": True,
+            "under_budget": True,
+            "error": str(e),
+            "error_type": "malformed_spans",
+            "details": [],
+        }
     if not span_objs:
         return {
             "flagged": True,
             "under_budget": True,
             "error": "No spans provided (cannot verify citations).",
+            "error_type": "no_spans",
             "details": [],
         }
 
@@ -238,17 +303,22 @@ def run_detect_hallucination(
     cfg = BackendConfig(
         kind=backend_kind, max_concurrency=int(max_concurrency), timeout_s=timeout_s
     )
-    results = score_trace_budget(
-        trace=trace,
-        verifier_model=verifier_model,
-        backend_cfg=cfg,
-        default_target=float(default_target),
-        temperature=float(temperature),
-        top_logprobs=int(top_logprobs),
-        placeholder=str(placeholder),
-        context_mode=str(context_mode),
-        reasoning=None,
-    )
+    try:
+        results = score_trace_budget(
+            trace=trace,
+            verifier_model=verifier_model,
+            backend_cfg=cfg,
+            default_target=float(default_target),
+            temperature=float(temperature),
+            top_logprobs=int(top_logprobs),
+            placeholder=str(placeholder),
+            context_mode=str(context_mode),
+            reasoning=None,
+        )
+    except ValueError as e:
+        if _is_no_logprobs_error(e):
+            return _no_logprobs_verdict()
+        raise
 
     details = [_format_result(r, units) for r in results]
 
@@ -331,17 +401,22 @@ def run_audit_trace_budget(
     cfg = BackendConfig(
         kind=backend_kind, max_concurrency=int(max_concurrency), timeout_s=timeout_s
     )
-    results = score_trace_budget(
-        trace=trace,
-        verifier_model=verifier_model,
-        backend_cfg=cfg,
-        default_target=float(default_target),
-        temperature=float(temperature),
-        top_logprobs=int(top_logprobs),
-        placeholder=str(placeholder),
-        context_mode=str(context_mode),
-        reasoning=None,
-    )
+    try:
+        results = score_trace_budget(
+            trace=trace,
+            verifier_model=verifier_model,
+            backend_cfg=cfg,
+            default_target=float(default_target),
+            temperature=float(temperature),
+            top_logprobs=int(top_logprobs),
+            placeholder=str(placeholder),
+            context_mode=str(context_mode),
+            reasoning=None,
+        )
+    except ValueError as e:
+        if _is_no_logprobs_error(e):
+            return _no_logprobs_verdict()
+        raise
 
     out = []
     for r in results:

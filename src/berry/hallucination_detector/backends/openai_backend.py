@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -13,6 +14,18 @@ except Exception:
 
 
 _thread_local = threading.local()
+logger = logging.getLogger(__name__)
+
+
+def _is_local_base_url(base_url: Optional[str]) -> bool:
+    if not base_url:
+        return False
+    lowered = base_url.lower()
+    return (
+        "127.0.0.1" in lowered
+        or "localhost" in lowered
+        or "0.0.0.0" in lowered
+    )
 
 
 def _get_client(
@@ -31,6 +44,9 @@ def _get_client(
 
     if not api_key:
         raise ValueError("OPENAI_API_KEY is not set (required for OpenAI backend)")
+
+    if _is_local_base_url(base_url) and (timeout_s is None or float(timeout_s) < 60.0):
+        timeout_s = 60.0
 
     key = (timeout_s, base_url, api_key)
     cache = getattr(_thread_local, "clients", None)
@@ -123,6 +139,12 @@ def call_text_chat(
                         ]
                     out_logprobs.append(token_data)
 
+            if include_logprobs and out_logprobs is None:
+                logger.warning(
+                    "OpenAI backend at base_url=%r returned no logprobs despite logprobs=true; "
+                    "downstream calibration will degrade. Verify the server supports logprobs.",
+                    base_url,
+                )
             return TextResult(
                 text=str(out_text), response_id=getattr(resp, "id", None), logprobs=out_logprobs
             )

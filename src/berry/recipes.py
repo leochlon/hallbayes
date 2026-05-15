@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -13,6 +13,10 @@ class Recipe:
     description: str
     author: str
     prompts: List[str]
+    backend: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    api_key: Optional[str] = None
 
 
 _BUILTIN: List[Recipe] = [
@@ -50,6 +54,36 @@ _BUILTIN: List[Recipe] = [
         description="Workflow prompt pack for optimizing any well-defined objective with baseline measurement, keep/revert decisions, and verified claims.",
         author="Berry",
         prompts=["objective_optimization_agent"],
+    ),
+    Recipe(
+        name="local_lmstudio",
+        title="Local backend: LM Studio",
+        description="Point Berry at a local LM Studio OpenAI-compatible server (default port 1234). Set OPENAI_API_KEY to any non-empty value.",
+        author="Berry",
+        prompts=["search_and_learn_verified"],
+        backend="local",
+        base_url="http://127.0.0.1:1234/v1",
+        model="gpt-oss-20b",
+    ),
+    Recipe(
+        name="local_llamacpp",
+        title="Local backend: llama.cpp server",
+        description="Point Berry at a local llama.cpp OpenAI-compatible server (default port 8080).",
+        author="Berry",
+        prompts=["search_and_learn_verified"],
+        backend="local",
+        base_url="http://127.0.0.1:8080/v1",
+        model="local",
+    ),
+    Recipe(
+        name="local_vllm",
+        title="Local backend: vLLM",
+        description="Point Berry at a local vLLM OpenAI-compatible server (default port 8000).",
+        author="Berry",
+        prompts=["search_and_learn_verified"],
+        backend="local",
+        base_url="http://127.0.0.1:8000/v1",
+        model="openai/gpt-oss-20b",
     ),
 ]
 
@@ -104,13 +138,20 @@ def _validate_recipe_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     prompts = payload.get("prompts")
     if not isinstance(prompts, list) or not all(isinstance(p, str) and p.strip() for p in prompts):
         raise ValueError("Recipe prompts must be a list of non-empty strings")
-    return {
+    out: Dict[str, Any] = {
         "name": name,
         "title": title,
         "description": description,
         "author": author,
         "prompts": prompts,
     }
+    for key in ("backend", "base_url", "model", "api_key"):
+        if key in payload and payload[key] is not None:
+            value = payload[key]
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Recipe {key} must be a non-empty string when provided")
+            out[key] = value
+    return out
 
 
 def install_recipe_file_to_project(path: Path, *, project_root: Path, force: bool = False) -> Path:

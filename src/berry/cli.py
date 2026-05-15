@@ -223,22 +223,107 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(_: argparse.Namespace) -> int:
+    """Verify backend health: config, then a tiny logprobs-enabled ping.
+
+    Reports backend kind, model, base_url (if applicable), HTTP status,
+    latency ms, and whether logprobs / top_logprobs are populated.
+    Exits 0 on success, 1 on any failure.
+    """
+    import time
+
     project_root = _find_repo_root(Path.cwd())
     cfg = load_config(project_root=project_root)
 
-    checks = {
+    env = _load_env_file(mcp_env_path())
+    backend = (env.get("BERRY_VERIFIER_BACKEND") or "openai").strip() or "openai"
+    model = (env.get("BERRY_VERIFIER_MODEL") or env.get("BERRY_MODEL") or "").strip()
+
+    if backend == "local":
+        base_url = (env.get("BERRY_LOCAL_BASE_URL") or "http://127.0.0.1:1234/v1").strip() or None
+    elif backend == "gemini":
+        base_url = (env.get("GEMINI_BASE_URL") or "").strip() or None
+    elif backend == "vertex":
+        base_url = (env.get("VERTEX_BASE_URL") or "").strip() or None
+    else:
+        base_url = (env.get("BERRY_OPENAI_BASE_URL") or env.get("OPENAI_BASE_URL") or "").strip() or None
+
+    report: dict = {
         "python": sys.version.split()[0],
         "project_root": str(project_root),
-        "allow_write": cfg.allow_write,
-        "allow_exec": cfg.allow_exec,
-        "allow_web": cfg.allow_web,
-        "enforce_verification": cfg.enforce_verification,
-        "require_plan_approval": cfg.require_plan_approval,
-        "audit_log_enabled": cfg.audit_log_enabled,
-        "diagnostics_opt_in": cfg.diagnostics_opt_in,
+        "config": {
+            "allow_write": cfg.allow_write,
+            "allow_exec": cfg.allow_exec,
+            "allow_web": cfg.allow_web,
+            "enforce_verification": cfg.enforce_verification,
+            "require_plan_approval": cfg.require_plan_approval,
+            "audit_log_enabled": cfg.audit_log_enabled,
+            "diagnostics_opt_in": cfg.diagnostics_opt_in,
+        },
+        "backend": backend,
+        "model": model,
+        "base_url": base_url,
     }
-    print(json.dumps(checks, indent=2))
-    return 0
+
+    if not model:
+        report["ping"] = {"ok": False, "error": "no verifier model configured; run `berry setup`"}
+        print(json.dumps(report, indent=2))
+        return 1
+
+    prompt = "Answer YES or NO: Is the sky typically blue during the day?"
+    api_key = (env.get("OPENAI_API_KEY") or "").strip()
+
+    t0 = time.monotonic()
+    http_status = "n/a"
+    logprobs_populated = False
+    top_logprobs_nonempty = False
+    err: Optional[str] = None
+
+    try:
+        if backend in ("openai", "local"):
+            try:
+                from openai import OpenAI
+            except Exception as e:
+                raise RuntimeError(f"openai SDK not available: {e}")
+            if backend == "openai" and not api_key:
+                raise RuntimeError("OPENAI_API_KEY missing")
+            effective_key = api_key or "not-needed"
+            kwargs = {"api_key": effective_key, "timeout": 30}
+            if base_url:
+                kwargs["base_url"] = base_url
+            client = OpenAI(**kwargs)
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=4,
+                logprobs=True,
+                top_logprobs=5,
+            )
+            http_status = 200
+            choice = resp.choices[0]
+            lp = getattr(choice, "logprobs", None)
+            content = getattr(lp, "content", None) if lp is not None else None
+            logprobs_populated = bool(content)
+            if content:
+                top = getattr(content[0], "top_logprobs", None)
+                top_logprobs_nonempty = bool(top)
+        else:
+            raise RuntimeError(f"unsupported backend for ping: {backend}")
+    except Exception as e:
+        err = f"{type(e).__name__}: {e}"
+
+    latency_ms = int((time.monotonic() - t0) * 1000)
+    ok = err is None and logprobs_populated and top_logprobs_nonempty
+    report["ping"] = {
+        "ok": ok,
+        "http_status": http_status,
+        "latency_ms": latency_ms,
+        "logprobs_populated": logprobs_populated,
+        "top_logprobs_nonempty": top_logprobs_nonempty,
+        "error": err,
+    }
+    print(json.dumps(report, indent=2))
+    return 0 if ok else 1
 
 
 def cmd_status(_: argparse.Namespace) -> int:

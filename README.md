@@ -38,6 +38,22 @@ Supported today:
 Not supported yet:
 - Anthropic (OpenAI-compat layer ignores `logprobs`)
 
+## Local Models
+
+Berry verifies against any OpenAI-compatible Chat Completions endpoint that returns `logprobs` + `top_logprobs` — so locally hosted models (vLLM, llama.cpp, LM Studio) work as first-class verifier backends. Point Berry at the local `base_url` and pick a model with reliable logprob support; no real API key is needed for most local servers (any non-empty string works). Run `berry doctor` to validate connectivity, logprob availability, and model selection before you start verifying.
+
+```jsonc
+// ~/.berry/mcp_env.json
+{
+  "BERRY_VERIFIER_BACKEND": "local",
+  "BERRY_VERIFIER_MODEL": "gpt-oss-20b",
+  "BERRY_LOCAL_BASE_URL": "http://127.0.0.1:1234/v1",
+  "OPENAI_API_KEY": "not-needed"
+}
+```
+
+See `docs/LOCAL-MODELS.md` for the full setup, supported servers, and calibration guidance.
+
 ## Quickstart
 
 1) Install:
@@ -66,6 +82,7 @@ berry setup
 
 - `docs/USAGE.md` — task‑oriented guides
 - `docs/CLI.md` — command reference
+- `docs/LOCAL-MODELS.md` — running Berry against locally hosted verifier models (incl. `berry doctor`)
 - `docs/CONFIGURATION.md` — config files, defaults, and env vars
 - `docs/MCP.md` — tools/prompts and transport details
 - `docs/PACKAGING.md` — release pipeline (macOS pkg + Homebrew cask)

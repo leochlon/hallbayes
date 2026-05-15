@@ -32,7 +32,16 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
+
+
+class SpanInput(TypedDict):
+    sid: str
+    text: str
+    snippet: NotRequired[str]
+    url: NotRequired[str]
+    title: NotRequired[str]
+
 
 from .config import load_config
 from .enforcement import AttemptRecord, EnforcementError, RunState, RunStore, SpanRecord
@@ -646,7 +655,7 @@ def create_server(
     @mcp.tool()
     def detect_hallucination(
         answer: str,
-        spans: List[Dict[str, str]],
+        spans: List[SpanInput],
         verifier_model: Optional[str] = None,
         default_target: float = 0.95,
         max_claims: int = 25,
@@ -654,7 +663,10 @@ def create_server(
         context_mode: str = "cited",
         timeout_s: float = 60.0,
     ) -> Dict[str, Any]:
-        """Information-budget diagnostic per claim."""
+        """Information-budget diagnostic per claim.
+
+        spans must each have ``sid`` (string id) and ``text`` (citation content).
+        """
         with _redirect_stdout_to_stderr():
             try:
                 return run_detect_hallucination(
@@ -667,13 +679,15 @@ def create_server(
                     context_mode=str(context_mode or "cited"),
                     timeout_s=float(timeout_s or 60.0),
                 )
+            except ValueError as e:
+                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "malformed_input", "details": []}
             except Exception as e:
-                return {"flagged": True, "under_budget": True, "error": str(e), "details": []}
+                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "internal", "details": []}
 
     @mcp.tool()
     def audit_trace_budget(
         steps: List[Dict[str, Any]],
-        spans: List[Dict[str, str]],
+        spans: List[SpanInput],
         verifier_model: Optional[str] = None,
         default_target: float = 0.95,
         require_citations: bool = False,
@@ -692,8 +706,10 @@ def create_server(
                     context_mode=str(context_mode or "cited"),
                     timeout_s=float(timeout_s or 60.0),
                 )
+            except ValueError as e:
+                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "malformed_input", "details": []}
             except Exception as e:
-                return {"flagged": True, "under_budget": True, "error": str(e), "details": []}
+                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "internal", "details": []}
 
     return mcp
 
