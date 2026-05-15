@@ -14,6 +14,7 @@ Why bypass the `openai` SDK:
 Response is normalized into the same `TextResult` shape as openai_backend so
 callers can swap backends without branching on field layout.
 """
+
 from __future__ import annotations
 
 import json
@@ -77,7 +78,8 @@ def _normalize_logprobs(raw: Any) -> Optional[List[Dict[str, Any]]]:
         if tops:
             entry["top_logprobs"] = [
                 {"token": t.get("token", ""), "logprob": t.get("logprob", 0.0)}
-                for t in tops if isinstance(t, dict)
+                for t in tops
+                if isinstance(t, dict)
             ]
         out.append(entry)
     return out

@@ -10,6 +10,7 @@ Usage:
         --model gpt-oss-20b \\
         --base-url http://127.0.0.1:1234/v1
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,84 +28,138 @@ from berry.hallucination_detector.core import run_detect_hallucination  # noqa: 
 
 TRUE_CASES: List[Tuple[str, str]] = [
     ("Paris is the capital of France.", "Paris is the capital of France."),
-    ("Water boils at 100 degrees Celsius at 1 atmosphere of pressure.",
-     "At standard atmospheric pressure of 1 atm, water boils at 100 degrees Celsius."),
+    (
+        "Water boils at 100 degrees Celsius at 1 atmosphere of pressure.",
+        "At standard atmospheric pressure of 1 atm, water boils at 100 degrees Celsius.",
+    ),
     ("The Earth orbits the Sun.", "The Earth orbits the Sun once per year."),
-    ("Mount Everest is the tallest mountain on Earth.",
-     "Mount Everest, at 8,848 meters, is the tallest mountain above sea level on Earth."),
-    ("Humans have 23 pairs of chromosomes.",
-     "A typical human cell contains 23 pairs of chromosomes."),
-    ("The Pacific Ocean is the largest ocean.",
-     "The Pacific Ocean is the largest and deepest of the world's oceans."),
-    ("World War II ended in 1945.",
-     "World War II ended in 1945 with the surrender of Japan."),
-    ("The chemical symbol for gold is Au.",
-     "Gold has the chemical symbol Au and atomic number 79."),
-    ("Light travels faster than sound.",
-     "Light travels at roughly 300,000 km/s, far faster than the speed of sound in air."),
-    ("The Great Wall of China is located in China.",
-     "The Great Wall of China stretches across northern China."),
-    ("Shakespeare wrote Hamlet.",
-     "William Shakespeare is the author of the tragedy Hamlet."),
-    ("A triangle has three sides.",
-     "By definition, every triangle is a polygon with exactly three sides."),
-    ("The human heart has four chambers.",
-     "The human heart consists of four chambers: two atria and two ventricles."),
-    ("DNA is a double helix.",
-     "DNA molecules are structured as a double helix of two complementary strands."),
-    ("The Amazon is a river in South America.",
-     "The Amazon River flows through several countries in South America."),
-    ("Mercury is the planet closest to the Sun.",
-     "Mercury is the innermost planet in the Solar System, closest to the Sun."),
-    ("Oxygen is required for human respiration.",
-     "Human cellular respiration requires oxygen to produce energy from glucose."),
-    ("English is spoken in the United Kingdom.",
-     "English is the primary language of the United Kingdom."),
-    ("The speed of light in a vacuum is approximately 300,000 km/s.",
-     "Light travels at approximately 299,792 km/s in a vacuum."),
-    ("Cats are mammals.",
-     "Domestic cats are small carnivorous mammals of the family Felidae."),
+    (
+        "Mount Everest is the tallest mountain on Earth.",
+        "Mount Everest, at 8,848 meters, is the tallest mountain above sea level on Earth.",
+    ),
+    (
+        "Humans have 23 pairs of chromosomes.",
+        "A typical human cell contains 23 pairs of chromosomes.",
+    ),
+    (
+        "The Pacific Ocean is the largest ocean.",
+        "The Pacific Ocean is the largest and deepest of the world's oceans.",
+    ),
+    ("World War II ended in 1945.", "World War II ended in 1945 with the surrender of Japan."),
+    (
+        "The chemical symbol for gold is Au.",
+        "Gold has the chemical symbol Au and atomic number 79.",
+    ),
+    (
+        "Light travels faster than sound.",
+        "Light travels at roughly 300,000 km/s, far faster than the speed of sound in air.",
+    ),
+    (
+        "The Great Wall of China is located in China.",
+        "The Great Wall of China stretches across northern China.",
+    ),
+    ("Shakespeare wrote Hamlet.", "William Shakespeare is the author of the tragedy Hamlet."),
+    (
+        "A triangle has three sides.",
+        "By definition, every triangle is a polygon with exactly three sides.",
+    ),
+    (
+        "The human heart has four chambers.",
+        "The human heart consists of four chambers: two atria and two ventricles.",
+    ),
+    (
+        "DNA is a double helix.",
+        "DNA molecules are structured as a double helix of two complementary strands.",
+    ),
+    (
+        "The Amazon is a river in South America.",
+        "The Amazon River flows through several countries in South America.",
+    ),
+    (
+        "Mercury is the planet closest to the Sun.",
+        "Mercury is the innermost planet in the Solar System, closest to the Sun.",
+    ),
+    (
+        "Oxygen is required for human respiration.",
+        "Human cellular respiration requires oxygen to produce energy from glucose.",
+    ),
+    (
+        "English is spoken in the United Kingdom.",
+        "English is the primary language of the United Kingdom.",
+    ),
+    (
+        "The speed of light in a vacuum is approximately 300,000 km/s.",
+        "Light travels at approximately 299,792 km/s in a vacuum.",
+    ),
+    ("Cats are mammals.", "Domestic cats are small carnivorous mammals of the family Felidae."),
 ]
 
 FALSE_CASES: List[Tuple[str, str]] = [
     ("Paris is the capital of Germany.", "Paris is the capital of France."),
-    ("Water boils at 50 degrees Celsius at 1 atmosphere.",
-     "Water boils at 100 degrees Celsius at 1 atm of pressure."),
+    (
+        "Water boils at 50 degrees Celsius at 1 atmosphere.",
+        "Water boils at 100 degrees Celsius at 1 atm of pressure.",
+    ),
     ("The Sun orbits the Earth.", "The Earth orbits the Sun once per year."),
-    ("Mount Everest is in Australia.",
-     "Mount Everest is located on the border between Nepal and Tibet."),
-    ("Humans have 50 pairs of chromosomes.",
-     "A typical human cell contains 23 pairs of chromosomes."),
-    ("The Atlantic Ocean is the largest ocean on Earth.",
-     "The Pacific Ocean is the largest and deepest of the world's oceans."),
-    ("World War II ended in 1965.",
-     "World War II ended in 1945 with the surrender of Japan."),
-    ("The chemical symbol for gold is Go.",
-     "Gold has the chemical symbol Au and atomic number 79."),
-    ("Sound travels faster than light.",
-     "Light travels at roughly 300,000 km/s, far faster than the speed of sound in air."),
-    ("The Great Wall of China is located in Brazil.",
-     "The Great Wall of China stretches across northern China."),
-    ("Charles Dickens wrote Hamlet.",
-     "William Shakespeare is the author of the tragedy Hamlet."),
-    ("A triangle has five sides.",
-     "By definition, every triangle is a polygon with exactly three sides."),
-    ("The human heart has two chambers.",
-     "The human heart consists of four chambers: two atria and two ventricles."),
-    ("DNA is a single strand.",
-     "DNA molecules are structured as a double helix of two complementary strands."),
-    ("The Amazon is a river in Europe.",
-     "The Amazon River flows through several countries in South America."),
-    ("Jupiter is the planet closest to the Sun.",
-     "Mercury is the innermost planet in the Solar System, closest to the Sun."),
-    ("Nitrogen alone is sufficient for human cellular respiration.",
-     "Human cellular respiration requires oxygen to produce energy from glucose."),
-    ("Mandarin is the primary language of the United Kingdom.",
-     "English is the primary language of the United Kingdom."),
-    ("Light travels at approximately 3 km/s in a vacuum.",
-     "Light travels at approximately 299,792 km/s in a vacuum."),
-    ("Cats are reptiles.",
-     "Domestic cats are small carnivorous mammals of the family Felidae."),
+    (
+        "Mount Everest is in Australia.",
+        "Mount Everest is located on the border between Nepal and Tibet.",
+    ),
+    (
+        "Humans have 50 pairs of chromosomes.",
+        "A typical human cell contains 23 pairs of chromosomes.",
+    ),
+    (
+        "The Atlantic Ocean is the largest ocean on Earth.",
+        "The Pacific Ocean is the largest and deepest of the world's oceans.",
+    ),
+    ("World War II ended in 1965.", "World War II ended in 1945 with the surrender of Japan."),
+    (
+        "The chemical symbol for gold is Go.",
+        "Gold has the chemical symbol Au and atomic number 79.",
+    ),
+    (
+        "Sound travels faster than light.",
+        "Light travels at roughly 300,000 km/s, far faster than the speed of sound in air.",
+    ),
+    (
+        "The Great Wall of China is located in Brazil.",
+        "The Great Wall of China stretches across northern China.",
+    ),
+    ("Charles Dickens wrote Hamlet.", "William Shakespeare is the author of the tragedy Hamlet."),
+    (
+        "A triangle has five sides.",
+        "By definition, every triangle is a polygon with exactly three sides.",
+    ),
+    (
+        "The human heart has two chambers.",
+        "The human heart consists of four chambers: two atria and two ventricles.",
+    ),
+    (
+        "DNA is a single strand.",
+        "DNA molecules are structured as a double helix of two complementary strands.",
+    ),
+    (
+        "The Amazon is a river in Europe.",
+        "The Amazon River flows through several countries in South America.",
+    ),
+    (
+        "Jupiter is the planet closest to the Sun.",
+        "Mercury is the innermost planet in the Solar System, closest to the Sun.",
+    ),
+    (
+        "Nitrogen alone is sufficient for human cellular respiration.",
+        "Human cellular respiration requires oxygen to produce energy from glucose.",
+    ),
+    (
+        "Mandarin is the primary language of the United Kingdom.",
+        "English is the primary language of the United Kingdom.",
+    ),
+    (
+        "Light travels at approximately 3 km/s in a vacuum.",
+        "Light travels at approximately 299,792 km/s in a vacuum.",
+    ),
+    ("Cats are reptiles.", "Domestic cats are small carnivorous mammals of the family Felidae."),
 ]
 
 
@@ -160,7 +215,11 @@ def _histogram(label: str, probs: List[float], *, width: int = 40) -> None:
     if probs:
         mean = sum(probs) / len(probs)
         srt = sorted(probs)
-        median = srt[len(srt) // 2] if len(srt) % 2 else 0.5 * (srt[len(srt) // 2 - 1] + srt[len(srt) // 2])
+        median = (
+            srt[len(srt) // 2]
+            if len(srt) % 2
+            else 0.5 * (srt[len(srt) // 2 - 1] + srt[len(srt) // 2])
+        )
         print(f"  mean={mean:.3f}  median={median:.3f}  min={min(probs):.3f}  max={max(probs):.3f}")
 
 
@@ -182,13 +241,17 @@ def _suggest_threshold(true_p: List[float], false_p: List[float]) -> Tuple[float
 def parse_args(argv: List[str]) -> argparse.Namespace:
     env_backend = (os.environ.get("BERRY_VERIFIER_BACKEND") or "openai").strip().lower()
     p = argparse.ArgumentParser(description="Calibrate Berry verifier thresholds.")
-    p.add_argument("--backend", choices=["openai", "local", "gemini", "vertex"],
-                   default=env_backend if env_backend in {"openai", "local", "gemini", "vertex"} else "openai")
+    p.add_argument(
+        "--backend",
+        choices=["openai", "local", "gemini", "vertex"],
+        default=env_backend if env_backend in {"openai", "local", "gemini", "vertex"} else "openai",
+    )
     p.add_argument("--model", required=True)
     p.add_argument("--base-url", default="")
     p.add_argument("--api-key", default="")
-    p.add_argument("--limit", type=int, default=0,
-                   help="If >0, run only the first N items from each set.")
+    p.add_argument(
+        "--limit", type=int, default=0, help="If >0, run only the first N items from each set."
+    )
     return p.parse_args(argv)
 
 

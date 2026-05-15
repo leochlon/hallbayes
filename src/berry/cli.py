@@ -245,7 +245,9 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     elif backend == "vertex":
         base_url = (env.get("VERTEX_BASE_URL") or "").strip() or None
     else:
-        base_url = (env.get("BERRY_OPENAI_BASE_URL") or env.get("OPENAI_BASE_URL") or "").strip() or None
+        base_url = (
+            env.get("BERRY_OPENAI_BASE_URL") or env.get("OPENAI_BASE_URL") or ""
+        ).strip() or None
 
     report: dict = {
         "python": sys.version.split()[0],

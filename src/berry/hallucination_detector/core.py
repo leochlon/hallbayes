@@ -26,8 +26,7 @@ def _no_logprobs_verdict() -> Dict[str, Any]:
         "flagged": True,
         "under_budget": True,
         "error": (
-            "Backend did not return logprobs - Berry requires top_logprobs "
-            "support. Check backend."
+            "Backend did not return logprobs - Berry requires top_logprobs support. Check backend."
         ),
         "error_type": "no_logprobs_from_backend",
         "details": [],
@@ -94,10 +93,12 @@ def _normalize_spans(spans: List[Dict[str, str]]) -> List[Span]:
                 break
         if not text:
             present = sorted(k for k in s.keys() if k != "sid")
-            skipped.append(f"index {i}: no usable text (keys present: {present or 'none'}; expected one of {list(_SPAN_TEXT_FALLBACK_KEYS)})")
+            skipped.append(
+                f"index {i}: no usable text (keys present: {present or 'none'}; expected one of {list(_SPAN_TEXT_FALLBACK_KEYS)})"
+            )
             continue
         if not sid:
-            sid = f"s{i+1}"
+            sid = f"s{i + 1}"
         out.append(Span(sid=sid, text=text))
     if raw and not out:
         raise ValueError("All spans malformed: " + "; ".join(skipped))

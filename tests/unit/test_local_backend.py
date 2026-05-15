@@ -76,7 +76,9 @@ def test_local_backend_url_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("BERRY_LOCAL_BASE_URL", "http://from-env:1111/v1")
     with patch.object(local_backend.urllib.request, "urlopen", side_effect=fake_urlopen):
-        call_text_chat_local(prompt="x", model="local-model", base_url="http://from-param:2222/v1", retries=0)
+        call_text_chat_local(
+            prompt="x", model="local-model", base_url="http://from-param:2222/v1", retries=0
+        )
     assert captured[-1].startswith("http://from-param:2222/v1")
 
     with patch.object(local_backend.urllib.request, "urlopen", side_effect=fake_urlopen):

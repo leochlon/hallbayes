@@ -1,4 +1,5 @@
 """Tests for _normalize_spans auto-sid + loud-failure behavior."""
+
 from __future__ import annotations
 
 import pytest

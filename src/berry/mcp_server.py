@@ -681,9 +681,21 @@ def create_server(
                     timeout_s=float(timeout_s or 60.0),
                 )
             except ValueError as e:
-                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "malformed_input", "details": []}
+                return {
+                    "flagged": True,
+                    "under_budget": True,
+                    "error": str(e),
+                    "error_type": "malformed_input",
+                    "details": [],
+                }
             except Exception as e:
-                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "internal", "details": []}
+                return {
+                    "flagged": True,
+                    "under_budget": True,
+                    "error": str(e),
+                    "error_type": "internal",
+                    "details": [],
+                }
 
     @mcp.tool()
     def audit_trace_budget(
@@ -708,9 +720,21 @@ def create_server(
                     timeout_s=float(timeout_s or 60.0),
                 )
             except ValueError as e:
-                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "malformed_input", "details": []}
+                return {
+                    "flagged": True,
+                    "under_budget": True,
+                    "error": str(e),
+                    "error_type": "malformed_input",
+                    "details": [],
+                }
             except Exception as e:
-                return {"flagged": True, "under_budget": True, "error": str(e), "error_type": "internal", "details": []}
+                return {
+                    "flagged": True,
+                    "under_budget": True,
+                    "error": str(e),
+                    "error_type": "internal",
+                    "details": [],
+                }
 
     return mcp
 

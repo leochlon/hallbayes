@@ -120,6 +120,7 @@ class LocalBackend:
 
     def reset_state(self) -> None:
         import gc
+
         gc.collect()
 
 

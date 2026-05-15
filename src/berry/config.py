@@ -130,9 +130,7 @@ def _coerce(cfg: Dict[str, Any]) -> BerryConfig:
         paid_features_enabled=bool(cfg.get("paid_features_enabled", False)),
         verifier_backend=str(cfg.get("verifier_backend", "openai")),
         verifier_model=(
-            None
-            if cfg.get("verifier_model") in {None, ""}
-            else str(cfg.get("verifier_model"))
+            None if cfg.get("verifier_model") in {None, ""} else str(cfg.get("verifier_model"))
         ),
         local_base_url=str(cfg.get("local_base_url", "http://127.0.0.1:1234/v1")),
     )

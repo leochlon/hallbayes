@@ -21,11 +21,7 @@ def _is_local_base_url(base_url: Optional[str]) -> bool:
     if not base_url:
         return False
     lowered = base_url.lower()
-    return (
-        "127.0.0.1" in lowered
-        or "localhost" in lowered
-        or "0.0.0.0" in lowered
-    )
+    return "127.0.0.1" in lowered or "localhost" in lowered or "0.0.0.0" in lowered
 
 
 def _get_client(
