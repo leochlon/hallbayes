@@ -32,16 +32,9 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, NotRequired, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Optional, Tuple
 
-
-class SpanInput(TypedDict):
-    sid: str
-    text: str
-    snippet: NotRequired[str]
-    url: NotRequired[str]
-    title: NotRequired[str]
-
+from typing_extensions import NotRequired, TypedDict
 
 from .config import load_config
 from .enforcement import AttemptRecord, EnforcementError, RunState, RunStore, SpanRecord
@@ -53,6 +46,14 @@ from .mcp_env import load_mcp_env
 from .paths import ensure_berry_home, resolve_user_path
 from .permissions import can_read_path
 from .prompts import list_prompts
+
+
+class SpanInput(TypedDict):
+    sid: str
+    text: str
+    snippet: NotRequired[str]
+    url: NotRequired[str]
+    title: NotRequired[str]
 
 
 @contextlib.contextmanager

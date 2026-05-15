@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional
 
 from .openai_backend import TextResult
 
-
 _DEFAULT_BASE_URL = "http://127.0.0.1:1234/v1"
 _DEFAULT_API_KEY = "local"  # most local runtimes accept any non-empty value
 

@@ -25,7 +25,6 @@ if _SRC.is_dir() and str(_SRC) not in sys.path:
 
 from berry.hallucination_detector.core import run_detect_hallucination  # noqa: E402
 
-
 TRUE_CASES: List[Tuple[str, str]] = [
     ("Paris is the capital of France.", "Paris is the capital of France."),
     ("Water boils at 100 degrees Celsius at 1 atmosphere of pressure.",
