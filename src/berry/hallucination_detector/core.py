@@ -22,6 +22,9 @@ _VALID_CONTEXT_MODE_ALIASES = {
     "cites": "cited",
 }
 _LN2 = math.log(2.0)
+_DEFAULT_GROUP_CLAIMS = True
+_DEFAULT_MAX_GROUP_SIZE = 8
+_DEFAULT_MAX_GROUP_PROMPT_CHARS = 24000
 
 
 @dataclass
@@ -314,6 +317,14 @@ def _format_result(
         "verification_skipped": bool(result.verification_skipped),
         "verifier_calls": int(result.verifier_calls),
         "verification_calls": int(result.verifier_calls),
+        "verifier_api_call_share": float(getattr(result, "verifier_api_call_share", result.verifier_calls)),
+        "verification_api_call_share": float(getattr(result, "verifier_api_call_share", result.verifier_calls)),
+        "grouped_verifier": bool(getattr(result, "grouped_verifier", False)),
+        "post_grouped": bool(getattr(result, "post_grouped", False)),
+        "prior_grouped": bool(getattr(result, "prior_grouped", False)),
+        "post_group_size": int(getattr(result, "post_group_size", 1)),
+        "prior_group_size": int(getattr(result, "prior_group_size", 0)),
+        "group_fallback": bool(getattr(result, "group_fallback", False)),
         "prior_skipped": bool(result.prior_skipped),
         "post_supports_target": bool(result.post_supports_target),
         "posterior_supported": posterior_supported,
@@ -326,6 +337,9 @@ def _format_result(
         "budget_evaluated": bool(not result.skipped_verifier and not result.prior_skipped and result.error is None),
         "min_log_odds_gain": _unit_value(result.min_log_odds_gain, units),
     }
+    fallback_reason = getattr(result, "group_fallback_reason", None)
+    if fallback_reason:
+        detail["group_fallback_reason"] = str(fallback_reason)[:2000]
     if result.error:
         detail["error"] = result.error
 
@@ -337,6 +351,12 @@ def _format_result(
             detail["prior_prompt"] = prior
         if post is not None:
             detail["post_prompt"] = post
+        post_group = _cap_prompt(getattr(result, "post_group_prompt", None), cap, "post_group_prompt")
+        prior_group = _cap_prompt(getattr(result, "prior_group_prompt", None), cap, "prior_group_prompt")
+        if post_group is not None:
+            detail["post_group_prompt"] = post_group
+        if prior_group is not None:
+            detail["prior_group_prompt"] = prior_group
     return detail
 
 
@@ -354,6 +374,13 @@ def _error_response(*, message: str, units: str = "bits", verifier_model: str = 
             "verifier_calls_planned": 0,
             "verification_calls": 0,
             "verification_calls_planned": 0,
+            "verifier_api_calls_estimated": 0,
+            "verifier_api_calls_planned": 0,
+            "verification_api_calls_estimated": 0,
+            "verification_api_calls_planned": 0,
+            "verifier_calls_saved_by_grouping": 0,
+            "grouped_results": 0,
+            "group_fallbacks": 0,
         },
         "details": [],
     }
@@ -373,12 +400,17 @@ def _summary(
     total: int,
     max_claims: Optional[int] = None,
     truncated: Optional[bool] = None,
+    group_claims: Optional[bool] = None,
+    max_group_size: Optional[int] = None,
+    max_group_prompt_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
     flagged_idxs = [detail["idx"] for detail in details if detail["flagged"]]
     statuses: Dict[str, int] = {}
     for detail in details:
         status = str(detail.get("status") or "unknown")
         statuses[status] = statuses.get(status, 0) + 1
+    logical_calls = sum(int(detail.get("verifier_calls", 0)) for detail in details)
+    api_call_share = sum(float(detail.get("verifier_api_call_share", detail.get("verifier_calls", 0))) for detail in details)
     out: Dict[str, Any] = {
         total_key: int(total),
         score_key: len(details),
@@ -390,14 +422,27 @@ def _summary(
         "context_mode": context_mode,
         "require_citations": bool(require_citations),
         "min_log_odds_gain": float(min_log_odds_gain),
-        "verifier_calls": sum(int(detail.get("verifier_calls", 0)) for detail in details),
-        "verifier_calls_planned": sum(int(detail.get("verifier_calls", 0)) for detail in details),
-        "verification_calls": sum(int(detail.get("verification_calls", 0)) for detail in details),
-        "verification_calls_planned": sum(int(detail.get("verification_calls", 0)) for detail in details),
+        "verifier_calls": logical_calls,
+        "verifier_calls_planned": logical_calls,
+        "verification_calls": logical_calls,
+        "verification_calls_planned": logical_calls,
+        "verifier_api_calls_estimated": round(api_call_share, 6),
+        "verifier_api_calls_planned": round(api_call_share, 6),
+        "verification_api_calls_estimated": round(api_call_share, 6),
+        "verification_api_calls_planned": round(api_call_share, 6),
+        "verifier_calls_saved_by_grouping": round(max(0.0, float(logical_calls) - api_call_share), 6),
+        "grouped_results": sum(1 for detail in details if detail.get("grouped_verifier")),
+        "group_fallbacks": sum(1 for detail in details if detail.get("group_fallback")),
         "statuses": statuses,
     }
     if max_claims is not None:
         out["max_claims"] = int(max_claims)
+    if group_claims is not None:
+        out["group_claims"] = bool(group_claims)
+    if max_group_size is not None:
+        out["max_group_size"] = int(max_group_size)
+    if max_group_prompt_chars is not None:
+        out["max_group_prompt_chars"] = int(max_group_prompt_chars)
     if truncated is not None:
         out["truncated"] = bool(truncated)
     return out
@@ -485,6 +530,9 @@ def run_detect_hallucination(
     max_prompt_chars: int = 3000,
     min_log_odds_gain: float = 0.0,
     use_cache: bool = True,
+    group_claims: bool = _DEFAULT_GROUP_CLAIMS,
+    max_group_size: int = _DEFAULT_MAX_GROUP_SIZE,
+    max_group_prompt_chars: int = _DEFAULT_MAX_GROUP_PROMPT_CHARS,
     pool_json_path: Optional[str] = None,
     local_llm_model_path: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -560,6 +608,9 @@ def run_detect_hallucination(
             min_log_odds_gain=float(min_log_odds_gain),
             include_prompts=bool(include_prompts),
             use_cache=bool(use_cache),
+            group_claims=bool(group_claims),
+            max_group_size=max_group_size,
+            max_group_prompt_chars=max_group_prompt_chars,
             reasoning=None,
         )
     except Exception as exc:
@@ -586,6 +637,9 @@ def run_detect_hallucination(
             total=len(all_claims),
             max_claims=max_claims_eff,
             truncated=truncated,
+            group_claims=bool(group_claims),
+            max_group_size=max_group_size,
+            max_group_prompt_chars=max_group_prompt_chars,
         ),
         "details": details,
     }
@@ -613,6 +667,9 @@ def run_audit_trace_budget(
     max_prompt_chars: int = 3000,
     min_log_odds_gain: float = 0.0,
     use_cache: bool = True,
+    group_claims: bool = _DEFAULT_GROUP_CLAIMS,
+    max_group_size: int = _DEFAULT_MAX_GROUP_SIZE,
+    max_group_prompt_chars: int = _DEFAULT_MAX_GROUP_PROMPT_CHARS,
     pool_json_path: Optional[str] = None,
     local_llm_model_path: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -659,6 +716,9 @@ def run_audit_trace_budget(
             min_log_odds_gain=float(min_log_odds_gain),
             include_prompts=bool(include_prompts),
             use_cache=bool(use_cache),
+            group_claims=bool(group_claims),
+            max_group_size=max_group_size,
+            max_group_prompt_chars=max_group_prompt_chars,
             reasoning=None,
         )
     except Exception as exc:
@@ -683,6 +743,9 @@ def run_audit_trace_budget(
             score_key="steps_scored",
             total_key="steps_total",
             total=len(step_objs),
+            group_claims=bool(group_claims),
+            max_group_size=max_group_size,
+            max_group_prompt_chars=max_group_prompt_chars,
         ),
         "details": details,
     }

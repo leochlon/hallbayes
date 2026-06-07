@@ -658,6 +658,9 @@ def create_server(
         top_logprobs: int = 5,
         min_log_odds_gain: float = 0.0,
         use_cache: bool = True,
+        group_claims: bool = True,
+        max_group_size: int = 8,
+        max_group_prompt_chars: int = 24000,
         timeout_s: float = 60.0,
     ) -> Dict[str, Any]:
         """Information-budget diagnostic per claim."""
@@ -677,6 +680,9 @@ def create_server(
                     top_logprobs=int(top_logprobs or 5),
                     min_log_odds_gain=float(min_log_odds_gain),
                     use_cache=bool(use_cache),
+                    group_claims=bool(group_claims),
+                    max_group_size=max_group_size,
+                    max_group_prompt_chars=max_group_prompt_chars,
                     timeout_s=float(timeout_s or 60.0),
                 )
             except Exception as e:
@@ -695,6 +701,9 @@ def create_server(
         top_logprobs: int = 5,
         min_log_odds_gain: float = 0.0,
         use_cache: bool = True,
+        group_claims: bool = True,
+        max_group_size: int = 8,
+        max_group_prompt_chars: int = 24000,
         timeout_s: float = 60.0,
     ) -> Dict[str, Any]:
         """Score explicit (claim, cites) steps."""
@@ -712,6 +721,9 @@ def create_server(
                     top_logprobs=int(top_logprobs or 5),
                     min_log_odds_gain=float(min_log_odds_gain),
                     use_cache=bool(use_cache),
+                    group_claims=bool(group_claims),
+                    max_group_size=max_group_size,
+                    max_group_prompt_chars=max_group_prompt_chars,
                     timeout_s=float(timeout_s or 60.0),
                 )
             except Exception as e:
