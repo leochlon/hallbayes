@@ -44,7 +44,9 @@ def clear_trace_budget_cache() -> None:
     tb.clear_verifier_cache()
 
 
-def _text_result(*, yes: float, no: float | None = None, unsure: float | None = None, token: str = "YES") -> TextResult:
+def _text_result(
+    *, yes: float, no: float | None = None, unsure: float | None = None, token: str = "YES"
+) -> TextResult:
     if no is None or unsure is None:
         other = (1.0 - yes) / 2.0
         no = other if no is None else no
@@ -122,7 +124,9 @@ def _trace(claim: str = "The service supports Gemini.", cites: list[str] | None 
     )
 
 
-def _score(monkeypatch, backend: ScriptedBackend, trace: Trace, **kwargs: Any) -> list[tb.BudgetResult]:
+def _score(
+    monkeypatch, backend: ScriptedBackend, trace: Trace, **kwargs: Any
+) -> list[tb.BudgetResult]:
     monkeypatch.setattr(tb, "make_backend", lambda _cfg: backend)
     return tb.score_trace_budget(
         trace=trace,
@@ -137,12 +141,14 @@ def _score(monkeypatch, backend: ScriptedBackend, trace: Trace, **kwargs: Any) -
 
 
 def test_interval_budget_is_target_directed_not_symmetric_kl() -> None:
-    required_min, required_max, observed_min, observed_max, gap_min, gap_max, flagged = tb._budget_from_intervals(
-        target=0.95,
-        p0_lo=0.99,
-        p0_hi=0.99,
-        p1_lo=0.01,
-        p1_hi=0.01,
+    required_min, required_max, observed_min, observed_max, gap_min, gap_max, flagged = (
+        tb._budget_from_intervals(
+            target=0.95,
+            p0_lo=0.99,
+            p0_hi=0.99,
+            p1_lo=0.01,
+            p1_hi=0.01,
+        )
     )
 
     assert required_min > 0
@@ -166,10 +172,12 @@ def test_contradicted_claim_fails_after_posterior_gate(monkeypatch) -> None:
 
 
 def test_prior_leak_fails_even_when_posterior_is_high(monkeypatch) -> None:
-    backend = ScriptedBackend([
-        _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
-        _text_result(yes=0.96, no=0.02, unsure=0.02, token="YES"),
-    ])
+    backend = ScriptedBackend(
+        [
+            _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
+            _text_result(yes=0.96, no=0.02, unsure=0.02, token="YES"),
+        ]
+    )
 
     [res] = _score(monkeypatch, backend, _trace())
 
@@ -182,10 +190,12 @@ def test_prior_leak_fails_even_when_posterior_is_high(monkeypatch) -> None:
 
 
 def test_supported_evidence_passes(monkeypatch) -> None:
-    backend = ScriptedBackend([
-        _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
-        _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
-    ])
+    backend = ScriptedBackend(
+        [
+            _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
+            _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
+        ]
+    )
 
     [res] = _score(monkeypatch, backend, _trace())
 
@@ -277,10 +287,12 @@ def test_empty_cited_context_skip_verifier_when_citations_are_optional(monkeypat
 
 def test_identical_prompts_are_deduplicated_in_cache(monkeypatch) -> None:
     tb.clear_verifier_cache()
-    backend = ScriptedBackend([
-        _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
-        _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
-    ])
+    backend = ScriptedBackend(
+        [
+            _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
+            _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
+        ]
+    )
     monkeypatch.setattr(tb, "make_backend", lambda _cfg: backend)
     trace = Trace(
         steps=[
@@ -320,19 +332,21 @@ def test_identical_prompts_are_deduplicated_in_cache(monkeypatch) -> None:
     tb.clear_verifier_cache()
 
 
-
-
 def test_grouped_claims_same_context_reduce_api_calls(monkeypatch) -> None:
     backend = ScriptedBackend(
         [
-            _group_text_result([
-                ("YES", 0.97, 0.01, 0.02),
-                ("YES", 0.98, 0.01, 0.01),
-            ]),
-            _group_text_result([
-                ("UNSURE", 0.04, 0.08, 0.88),
-                ("UNSURE", 0.03, 0.07, 0.90),
-            ]),
+            _group_text_result(
+                [
+                    ("YES", 0.97, 0.01, 0.02),
+                    ("YES", 0.98, 0.01, 0.01),
+                ]
+            ),
+            _group_text_result(
+                [
+                    ("UNSURE", 0.04, 0.08, 0.88),
+                    ("UNSURE", 0.03, 0.07, 0.90),
+                ]
+            ),
         ]
     )
     monkeypatch.setattr(tb, "make_backend", lambda _cfg: backend)
@@ -369,10 +383,12 @@ def test_grouped_claims_same_context_reduce_api_calls(monkeypatch) -> None:
 def test_grouped_posterior_gate_only_runs_prior_for_supported_claims(monkeypatch) -> None:
     backend = ScriptedBackend(
         [
-            _group_text_result([
-                ("YES", 0.97, 0.01, 0.02),
-                ("NO", 0.01, 0.98, 0.01),
-            ]),
+            _group_text_result(
+                [
+                    ("YES", 0.97, 0.01, 0.02),
+                    ("NO", 0.01, 0.98, 0.01),
+                ]
+            ),
             _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
         ]
     )
@@ -412,10 +428,12 @@ def test_grouped_parse_failure_falls_back_to_single_claim_prompts(monkeypatch) -
             _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
             _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
             _text_result(yes=0.98, no=0.01, unsure=0.01, token="YES"),
-            _group_text_result([
-                ("UNSURE", 0.04, 0.08, 0.88),
-                ("UNSURE", 0.03, 0.07, 0.90),
-            ]),
+            _group_text_result(
+                [
+                    ("UNSURE", 0.04, 0.08, 0.88),
+                    ("UNSURE", 0.03, 0.07, 0.90),
+                ]
+            ),
         ]
     )
     monkeypatch.setattr(tb, "make_backend", lambda _cfg: backend)
@@ -489,10 +507,12 @@ def test_unknown_citations_take_precedence_over_missing_citations(monkeypatch) -
 
 
 def test_score_trace_budget_accepts_dict_like_trace(monkeypatch) -> None:
-    backend = ScriptedBackend([
-        _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
-        _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
-    ])
+    backend = ScriptedBackend(
+        [
+            _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
+            _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
+        ]
+    )
     monkeypatch.setattr(tb, "make_backend", lambda _cfg: backend)
 
     [res] = tb.score_trace_budget(

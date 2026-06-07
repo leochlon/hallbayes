@@ -399,7 +399,7 @@ CONTEXT SPANS:
 {ctx}
 
 CLAIM:
-{str(claim or '').strip()}
+{str(claim or "").strip()}
 
 Question: Is the CLAIM entailed by the CONTEXT?
 
@@ -475,11 +475,15 @@ def _defaulted_int(value: Any, default: int) -> int:
     return int(value)
 
 
-def _validate_grouping_params(*, max_group_size: Any, max_group_prompt_chars: Any) -> Tuple[int, int]:
+def _validate_grouping_params(
+    *, max_group_size: Any, max_group_prompt_chars: Any
+) -> Tuple[int, int]:
     try:
         group_size = _defaulted_int(max_group_size, _DEFAULT_MAX_GROUP_SIZE)
     except Exception as exc:
-        raise ValueError(f"max_group_size must be an integer in [1, 64], got {max_group_size!r}") from exc
+        raise ValueError(
+            f"max_group_size must be an integer in [1, 64], got {max_group_size!r}"
+        ) from exc
     if not (1 <= group_size <= 64):
         raise ValueError(f"max_group_size must be an integer in [1, 64], got {max_group_size!r}")
     try:
@@ -489,7 +493,9 @@ def _validate_grouping_params(*, max_group_size: Any, max_group_prompt_chars: An
             f"max_group_prompt_chars must be an integer >= 1000, got {max_group_prompt_chars!r}"
         ) from exc
     if prompt_chars < 1000:
-        raise ValueError(f"max_group_prompt_chars must be an integer >= 1000, got {max_group_prompt_chars!r}")
+        raise ValueError(
+            f"max_group_prompt_chars must be an integer >= 1000, got {max_group_prompt_chars!r}"
+        )
     return group_size, prompt_chars
 
 
@@ -719,7 +725,9 @@ def _grouped_text_labels(text: Any) -> List[str]:
 def _validate_grouped_text_alignment(*, text: Any, probs: Sequence[YesProb], expected: int) -> None:
     text_labels = _grouped_text_labels(text)
     if len(text_labels) != int(expected):
-        raise ValueError(f"expected exactly {expected} grouped output lines, found {len(text_labels)}")
+        raise ValueError(
+            f"expected exactly {expected} grouped output lines, found {len(text_labels)}"
+        )
     token_labels = [canonical_answer_label(prob.generated) for prob in probs]
     if token_labels != text_labels:
         raise ValueError(
@@ -749,8 +757,12 @@ def _synthetic_yesprob(*, generated: str, p_yes: float = 0.0) -> YesProb:
 
 
 def _posterior_failure_status(post_yes: YesProb, *, target: float) -> str:
-    generated = canonical_answer_label(post_yes.generated) or str(post_yes.generated or "").strip().upper()
-    if generated == "NO" or post_yes.p_no_lower > max(post_yes.p_yes_upper, post_yes.p_unsure_upper):
+    generated = (
+        canonical_answer_label(post_yes.generated) or str(post_yes.generated or "").strip().upper()
+    )
+    if generated == "NO" or post_yes.p_no_lower > max(
+        post_yes.p_yes_upper, post_yes.p_unsure_upper
+    ):
         return "contradicted"
     if post_yes.p_yes_upper >= target and post_yes.p_yes_lower < target:
         return "ambiguous_verifier"
@@ -778,7 +790,9 @@ def _decision_from_probs(
     prior_below_target = prior_yes.p_yes_upper < target
     gain_min = _logit(post_yes.p_yes_lower) - _logit(prior_yes.p_yes_upper)
     gain_max = _logit(post_yes.p_yes_upper) - _logit(prior_yes.p_yes_lower)
-    evidence_dependent = bool(post_supports_target and prior_below_target and gain_min >= min_log_odds_gain)
+    evidence_dependent = bool(
+        post_supports_target and prior_below_target and gain_min >= min_log_odds_gain
+    )
     kl_budget_sufficient = bool(req_min <= obs_max)
 
     reasons: List[str] = []
@@ -827,8 +841,12 @@ def _budget_from_intervals(
     p1_hi: float,
     min_log_odds_gain: float = _DEFAULT_MIN_LOG_ODDS_GAIN,
 ) -> Tuple[float, float, float, float, float, float, bool]:
-    prior = YesProb(p0_lo, p0_hi, generated="INTERVAL", generated_logprob=0.0, kth_logprob=None, topk={})
-    post = YesProb(p1_lo, p1_hi, generated="INTERVAL", generated_logprob=0.0, kth_logprob=None, topk={})
+    prior = YesProb(
+        p0_lo, p0_hi, generated="INTERVAL", generated_logprob=0.0, kth_logprob=None, topk={}
+    )
+    post = YesProb(
+        p1_lo, p1_hi, generated="INTERVAL", generated_logprob=0.0, kth_logprob=None, topk={}
+    )
     decision = _decision_from_probs(
         prior_yes=prior,
         post_yes=post,
@@ -867,14 +885,19 @@ def _result_from_decision(
     error: Optional[str] = None,
 ) -> BudgetResult:
     final_status = str(status or decision.status)
-    final_reasons = [str(r) for r in (reasons if reasons is not None else decision.reasons) if str(r)]
+    final_reasons = [
+        str(r) for r in (reasons if reasons is not None else decision.reasons) if str(r)
+    ]
     flagged = bool(final_status != "passed" or skipped_verifier or decision.flagged or error)
     post_grouped = bool(post_meta.grouped) if post_meta is not None else False
     prior_grouped = bool(prior_meta.grouped) if prior_meta is not None else False
     post_group_size = int(post_meta.group_size) if post_meta is not None else 1
-    prior_group_size = int(prior_meta.group_size) if prior_meta is not None else (0 if prior_skipped else 1)
+    prior_group_size = (
+        int(prior_meta.group_size) if prior_meta is not None else (0 if prior_skipped else 1)
+    )
     group_fallback = bool(
-        (post_meta is not None and post_meta.fallback) or (prior_meta is not None and prior_meta.fallback)
+        (post_meta is not None and post_meta.fallback)
+        or (prior_meta is not None and prior_meta.fallback)
     )
     fallback_reason = None
     if post_meta is not None and post_meta.fallback_reason:
@@ -928,7 +951,9 @@ def _result_from_decision(
         post_prompt=post_prompt if include_prompts else None,
         prior_prompt=prior_prompt if include_prompts and not prior_skipped else None,
         post_group_prompt=post_prompt if include_prompts and post_grouped else None,
-        prior_group_prompt=prior_prompt if include_prompts and prior_grouped and not prior_skipped else None,
+        prior_group_prompt=prior_prompt
+        if include_prompts and prior_grouped and not prior_skipped
+        else None,
         error=error,
     )
 
@@ -1053,11 +1078,15 @@ def _evict_cache_if_needed(cache: MutableMapping[str, Any]) -> None:
                 break
 
 
-def _call_backend_resilient(*, backend: Any, prompts: Sequence[str], call_kwargs: Dict[str, Any]) -> List[Any]:
+def _call_backend_resilient(
+    *, backend: Any, prompts: Sequence[str], call_kwargs: Dict[str, Any]
+) -> List[Any]:
     try:
         results = backend.call_text_batch(prompts=prompts, **call_kwargs)
         if len(results) != len(prompts):
-            raise RuntimeError(f"verifier returned {len(results)} results for {len(prompts)} prompts")
+            raise RuntimeError(
+                f"verifier returned {len(results)} results for {len(prompts)} prompts"
+            )
         return list(results)
     except Exception as batch_exc:
         if not hasattr(backend, "call_text"):
@@ -1128,7 +1157,9 @@ def _call_text_batch_cached(
         key_to_positions[key].append(pos)
 
     if missing_prompts:
-        fetched = _call_backend_resilient(backend=backend, prompts=missing_prompts, call_kwargs=call_kwargs)
+        fetched = _call_backend_resilient(
+            backend=backend, prompts=missing_prompts, call_kwargs=call_kwargs
+        )
         for key, result in zip(missing_keys, fetched):
             if enabled and not isinstance(result, Exception) and prompt_cache is not None:
                 with _PROMPT_CACHE_LOCK:
@@ -1189,7 +1220,9 @@ def _parse_prompt_group_result(group: _PromptGroup, result: Any) -> List[YesProb
         raise result
     if group.grouped:
         probs = yesprobs_from_group_logprobs(result.logprobs, expected=len(group.jobs))
-        _validate_grouped_text_alignment(text=getattr(result, "text", ""), probs=probs, expected=len(group.jobs))
+        _validate_grouped_text_alignment(
+            text=getattr(result, "text", ""), probs=probs, expected=len(group.jobs)
+        )
         return probs
     return [yesprob_from_logprobs(result.logprobs)]
 
@@ -1381,7 +1414,9 @@ def _make_job(
         unknown_raw = _field(step, "unknown_citations", [])
     unknown_citations = _dedupe(unknown_raw or [])
     citation_normalizations = [
-        dict(item) for item in (_field(step, "citation_normalizations", []) or []) if isinstance(item, dict)
+        dict(item)
+        for item in (_field(step, "citation_normalizations", []) or [])
+        if isinstance(item, dict)
     ]
     ctx_spans, null_spans, post_prompt, prior_prompt = _prompts_for_claim(
         spans=spans,
@@ -1450,7 +1485,9 @@ def score_trace_budget(
 
     if _trace_debug_enabled():
         logger.debug("DEBUG [trace_budget]: %s claims to verify", len(steps))
-        logger.debug("DEBUG [trace_budget]: %s total spans, context_mode=%r", len(spans), context_mode)
+        logger.debug(
+            "DEBUG [trace_budget]: %s total spans, context_mode=%r", len(spans), context_mode
+        )
         logger.debug(
             "DEBUG [trace_budget]: group_claims=%r max_group_size=%s max_group_prompt_chars=%s",
             group_claims,
@@ -1461,7 +1498,8 @@ def score_trace_budget(
     for pos, step in enumerate(steps):
         idx = int(_field(step, "idx", pos))
         target = _validate_probability(
-            f"confidence for step idx={idx}", _field(step, "confidence", default_target) or default_target
+            f"confidence for step idx={idx}",
+            _field(step, "confidence", default_target) or default_target,
         )
         job = _make_job(
             pos=pos,
@@ -1529,7 +1567,7 @@ def score_trace_budget(
     cfg.max_concurrency = max(1, min(64, int(cfg.max_concurrency or 1)))
     backend = make_backend(cfg)
     prompt_cache = _PROMPT_CACHE if use_cache else None
-    common_stage_kwargs = {
+    common_stage_kwargs: Dict[str, Any] = {
         "model": verifier_model,
         "instructions": _VERIFIER_INSTRUCTIONS,
         "temperature": float(temperature),
@@ -1635,7 +1673,9 @@ def score_trace_budget(
                 **common_stage_kwargs,
             )
         except Exception as exc:
-            prior_values_by_pos, prior_meta_by_pos = _failed_stage_maps(prior_jobs, kind="prior", exc=exc)
+            prior_values_by_pos, prior_meta_by_pos = _failed_stage_maps(
+                prior_jobs, kind="prior", exc=exc
+            )
 
     for job in prior_jobs:
         post_yes = post_by_pos[job.pos]

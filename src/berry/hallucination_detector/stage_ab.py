@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set
 
-
 _LABEL_ALIASES = {
     "YES": {"Y", "YES"},
     "NO": {"N", "NO"},

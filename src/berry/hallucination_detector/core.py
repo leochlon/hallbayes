@@ -76,7 +76,7 @@ def _backend_kind() -> str:
     return (os.environ.get("BERRY_VERIFIER_BACKEND") or "openai").strip().lower()
 
 
-def _normalize_spans(spans: List[Dict[str, str]]) -> List[Span]:
+def _normalize_spans(spans: Sequence[Any]) -> List[Span]:
     out: List[Span] = []
     for raw in spans or []:
         if not isinstance(raw, dict):
@@ -147,7 +147,9 @@ def _map_cites_to_known_ids(cites: List[str], known: Set[str]) -> List[str]:
     return mapped
 
 
-def _normalize_steps(steps: List[Dict[str, Any]], default_target: float, known_ids: Set[str]) -> List[Step]:
+def _normalize_steps(
+    steps: Sequence[Any], default_target: float, known_ids: Set[str]
+) -> List[Step]:
     out: List[Step] = []
     for i, raw_step in enumerate(steps or []):
         if not isinstance(raw_step, dict):
@@ -158,9 +160,15 @@ def _normalize_steps(steps: List[Dict[str, Any]], default_target: float, known_i
         idx = int(raw_step.get("idx", i))
         raw_cites = [str(c).strip() for c in (raw_step.get("cites") or []) if str(c).strip()]
         cites, normalizations = _map_cites_with_normalizations(raw_cites, known_ids)
-        explicit_unknown = raw_step.get("unknown_citations", raw_step.get("unknown_cites", [])) or []
-        unknown = _dedupe_preserving_order(list(explicit_unknown) + [cite for cite in cites if cite not in known_ids])
-        conf = _validate_probability(raw_step.get("confidence", default_target) or default_target, name="confidence")
+        explicit_unknown = (
+            raw_step.get("unknown_citations", raw_step.get("unknown_cites", [])) or []
+        )
+        unknown = _dedupe_preserving_order(
+            list(explicit_unknown) + [cite for cite in cites if cite not in known_ids]
+        )
+        conf = _validate_probability(
+            raw_step.get("confidence", default_target) or default_target, name="confidence"
+        )
         out.append(
             Step(
                 idx=idx,
@@ -241,7 +249,10 @@ def _prob_dict(prob: Any) -> Dict[str, Any]:
         "topk": prob.topk,
         "labels": {
             "YES": {"lower": prob.p_yes_lower, "upper": prob.p_yes_upper},
-            "NO": {"lower": getattr(prob, "p_no_lower", 0.0), "upper": getattr(prob, "p_no_upper", 1.0)},
+            "NO": {
+                "lower": getattr(prob, "p_no_lower", 0.0),
+                "upper": getattr(prob, "p_no_upper", 1.0),
+            },
             "UNSURE": {
                 "lower": getattr(prob, "p_unsure_lower", 0.0),
                 "upper": getattr(prob, "p_unsure_upper", 1.0),
@@ -305,8 +316,18 @@ def _format_result(
             "max": _unit_value(result.budget_gap_max, units),
             "units": units,
         },
-        "evidence_gain": {"min": gain_min, "max": gain_max, "required_min": gain_required, "units": units},
-        "evidence_log_odds_gain": {"min": gain_min, "max": gain_max, "required_min": gain_required, "units": units},
+        "evidence_gain": {
+            "min": gain_min,
+            "max": gain_max,
+            "required_min": gain_required,
+            "units": units,
+        },
+        "evidence_log_odds_gain": {
+            "min": gain_min,
+            "max": gain_max,
+            "required_min": gain_required,
+            "units": units,
+        },
         "flagged": bool(result.flagged),
         "has_any_citations": bool(result.raw_cites or result.cites),
         "missing_citations": bool(result.missing_citations),
@@ -317,8 +338,12 @@ def _format_result(
         "verification_skipped": bool(result.verification_skipped),
         "verifier_calls": int(result.verifier_calls),
         "verification_calls": int(result.verifier_calls),
-        "verifier_api_call_share": float(getattr(result, "verifier_api_call_share", result.verifier_calls)),
-        "verification_api_call_share": float(getattr(result, "verifier_api_call_share", result.verifier_calls)),
+        "verifier_api_call_share": float(
+            getattr(result, "verifier_api_call_share", result.verifier_calls)
+        ),
+        "verification_api_call_share": float(
+            getattr(result, "verifier_api_call_share", result.verifier_calls)
+        ),
         "grouped_verifier": bool(getattr(result, "grouped_verifier", False)),
         "post_grouped": bool(getattr(result, "post_grouped", False)),
         "prior_grouped": bool(getattr(result, "prior_grouped", False)),
@@ -334,7 +359,9 @@ def _format_result(
         "prior_leak": bool(result.prior_leak),
         "kl_budget_sufficient": bool(result.kl_budget_sufficient),
         "kl_under_budget": kl_under_budget,
-        "budget_evaluated": bool(not result.skipped_verifier and not result.prior_skipped and result.error is None),
+        "budget_evaluated": bool(
+            not result.skipped_verifier and not result.prior_skipped and result.error is None
+        ),
         "min_log_odds_gain": _unit_value(result.min_log_odds_gain, units),
     }
     fallback_reason = getattr(result, "group_fallback_reason", None)
@@ -351,8 +378,12 @@ def _format_result(
             detail["prior_prompt"] = prior
         if post is not None:
             detail["post_prompt"] = post
-        post_group = _cap_prompt(getattr(result, "post_group_prompt", None), cap, "post_group_prompt")
-        prior_group = _cap_prompt(getattr(result, "prior_group_prompt", None), cap, "prior_group_prompt")
+        post_group = _cap_prompt(
+            getattr(result, "post_group_prompt", None), cap, "post_group_prompt"
+        )
+        prior_group = _cap_prompt(
+            getattr(result, "prior_group_prompt", None), cap, "prior_group_prompt"
+        )
         if post_group is not None:
             detail["post_group_prompt"] = post_group
         if prior_group is not None:
@@ -360,7 +391,9 @@ def _format_result(
     return detail
 
 
-def _error_response(*, message: str, units: str = "bits", verifier_model: str = "", backend: str = "") -> Dict[str, Any]:
+def _error_response(
+    *, message: str, units: str = "bits", verifier_model: str = "", backend: str = ""
+) -> Dict[str, Any]:
     return {
         "flagged": True,
         "under_budget": True,
@@ -410,7 +443,10 @@ def _summary(
         status = str(detail.get("status") or "unknown")
         statuses[status] = statuses.get(status, 0) + 1
     logical_calls = sum(int(detail.get("verifier_calls", 0)) for detail in details)
-    api_call_share = sum(float(detail.get("verifier_api_call_share", detail.get("verifier_calls", 0))) for detail in details)
+    api_call_share = sum(
+        float(detail.get("verifier_api_call_share", detail.get("verifier_calls", 0)))
+        for detail in details
+    )
     out: Dict[str, Any] = {
         total_key: int(total),
         score_key: len(details),
@@ -430,7 +466,9 @@ def _summary(
         "verifier_api_calls_planned": round(api_call_share, 6),
         "verification_api_calls_estimated": round(api_call_share, 6),
         "verification_api_calls_planned": round(api_call_share, 6),
-        "verifier_calls_saved_by_grouping": round(max(0.0, float(logical_calls) - api_call_share), 6),
+        "verifier_calls_saved_by_grouping": round(
+            max(0.0, float(logical_calls) - api_call_share), 6
+        ),
         "grouped_results": sum(1 for detail in details if detail.get("grouped_verifier")),
         "group_fallbacks": sum(1 for detail in details if detail.get("group_fallback")),
         "statuses": statuses,
@@ -500,7 +538,9 @@ def _validate_common(
     try:
         max_concurrency = int(max_concurrency or 1)
     except Exception as exc:
-        raise ValueError(f"max_concurrency must be an integer in [1, 64], got {max_concurrency!r}") from exc
+        raise ValueError(
+            f"max_concurrency must be an integer in [1, 64], got {max_concurrency!r}"
+        ) from exc
     if not (1 <= max_concurrency <= 64):
         raise ValueError(f"max_concurrency must be an integer in [1, 64], got {max_concurrency!r}")
     min_log_odds_gain = float(min_log_odds_gain or 0.0)
@@ -538,17 +578,24 @@ def run_detect_hallucination(
 ) -> Dict[str, Any]:
     backend_kind = _backend_kind()
     try:
-        units, default_target, context_mode, top_logprobs, max_concurrency, min_log_odds_gain = _validate_common(
-            units=units,
-            default_target=default_target,
-            context_mode=context_mode,
-            top_logprobs=top_logprobs,
-            max_concurrency=max_concurrency,
-            min_log_odds_gain=min_log_odds_gain,
+        units, default_target, context_mode, top_logprobs, max_concurrency, min_log_odds_gain = (
+            _validate_common(
+                units=units,
+                default_target=default_target,
+                context_mode=context_mode,
+                top_logprobs=top_logprobs,
+                max_concurrency=max_concurrency,
+                min_log_odds_gain=min_log_odds_gain,
+            )
         )
         max_claims_eff = max(1, int(max_claims or 25))
     except Exception as exc:
-        return _error_response(message=str(exc), units=str(units or "bits"), verifier_model=verifier_model, backend=backend_kind)
+        return _error_response(
+            message=str(exc),
+            units=str(units or "bits"),
+            verifier_model=verifier_model,
+            backend=backend_kind,
+        )
 
     if pool_json_path or local_llm_model_path:
         return _error_response(
@@ -569,7 +616,9 @@ def run_detect_hallucination(
         known_ids = {span.sid for span in span_objs}
         all_claims = _split_claims(answer, mode=claim_split, max_claims=None)
     except Exception as exc:
-        return _error_response(message=str(exc), units=units, verifier_model=verifier_model, backend=backend_kind)
+        return _error_response(
+            message=str(exc), units=units, verifier_model=verifier_model, backend=backend_kind
+        )
 
     claims = all_claims[:max_claims_eff]
     truncated = len(all_claims) > len(claims)
@@ -614,10 +663,14 @@ def run_detect_hallucination(
             reasoning=None,
         )
     except Exception as exc:
-        return _error_response(message=str(exc), units=units, verifier_model=verifier_model, backend=backend_kind)
+        return _error_response(
+            message=str(exc), units=units, verifier_model=verifier_model, backend=backend_kind
+        )
 
     details = [
-        _format_result(result, units, include_prompts=include_prompts, max_prompt_chars=max_prompt_chars)
+        _format_result(
+            result, units, include_prompts=include_prompts, max_prompt_chars=max_prompt_chars
+        )
         for result in results
     ]
     flagged = any(detail["flagged"] for detail in details) or bool(truncated)
@@ -675,16 +728,23 @@ def run_audit_trace_budget(
 ) -> Dict[str, Any]:
     backend_kind = _backend_kind()
     try:
-        units, default_target, context_mode, top_logprobs, max_concurrency, min_log_odds_gain = _validate_common(
-            units=units,
-            default_target=default_target,
-            context_mode=context_mode,
-            top_logprobs=top_logprobs,
-            max_concurrency=max_concurrency,
-            min_log_odds_gain=min_log_odds_gain,
+        units, default_target, context_mode, top_logprobs, max_concurrency, min_log_odds_gain = (
+            _validate_common(
+                units=units,
+                default_target=default_target,
+                context_mode=context_mode,
+                top_logprobs=top_logprobs,
+                max_concurrency=max_concurrency,
+                min_log_odds_gain=min_log_odds_gain,
+            )
         )
     except Exception as exc:
-        return _error_response(message=str(exc), units=str(units or "bits"), verifier_model=verifier_model, backend=backend_kind)
+        return _error_response(
+            message=str(exc),
+            units=str(units or "bits"),
+            verifier_model=verifier_model,
+            backend=backend_kind,
+        )
 
     if pool_json_path or local_llm_model_path:
         return _error_response(
@@ -722,10 +782,14 @@ def run_audit_trace_budget(
             reasoning=None,
         )
     except Exception as exc:
-        return _error_response(message=str(exc), units=units, verifier_model=verifier_model, backend=backend_kind)
+        return _error_response(
+            message=str(exc), units=units, verifier_model=verifier_model, backend=backend_kind
+        )
 
     details = [
-        _format_result(result, units, include_prompts=include_prompts, max_prompt_chars=max_prompt_chars)
+        _format_result(
+            result, units, include_prompts=include_prompts, max_prompt_chars=max_prompt_chars
+        )
         for result in results
     ]
     flagged = any(detail["flagged"] for detail in details)
