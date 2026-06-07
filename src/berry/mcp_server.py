@@ -650,8 +650,14 @@ def create_server(
         verifier_model: Optional[str] = None,
         default_target: float = 0.95,
         max_claims: int = 25,
+        claim_split: str = "sentences",
         require_citations: bool = False,
         context_mode: str = "cited",
+        include_prompts: bool = False,
+        max_prompt_chars: int = 3000,
+        top_logprobs: int = 5,
+        min_log_odds_gain: float = 0.0,
+        use_cache: bool = True,
         timeout_s: float = 60.0,
     ) -> Dict[str, Any]:
         """Information-budget diagnostic per claim."""
@@ -663,8 +669,14 @@ def create_server(
                     verifier_model=str(verifier_model or _default_verifier_model()),
                     default_target=float(default_target or 0.95),
                     max_claims=int(max_claims or 25),
+                    claim_split=str(claim_split or "sentences"),
                     require_citations=bool(require_citations),
                     context_mode=str(context_mode or "cited"),
+                    include_prompts=bool(include_prompts),
+                    max_prompt_chars=int(max_prompt_chars or 3000),
+                    top_logprobs=int(top_logprobs or 5),
+                    min_log_odds_gain=float(min_log_odds_gain),
+                    use_cache=bool(use_cache),
                     timeout_s=float(timeout_s or 60.0),
                 )
             except Exception as e:
@@ -678,6 +690,11 @@ def create_server(
         default_target: float = 0.95,
         require_citations: bool = False,
         context_mode: str = "cited",
+        include_prompts: bool = False,
+        max_prompt_chars: int = 3000,
+        top_logprobs: int = 5,
+        min_log_odds_gain: float = 0.0,
+        use_cache: bool = True,
         timeout_s: float = 60.0,
     ) -> Dict[str, Any]:
         """Score explicit (claim, cites) steps."""
@@ -690,6 +707,11 @@ def create_server(
                     default_target=float(default_target or 0.95),
                     require_citations=bool(require_citations),
                     context_mode=str(context_mode or "cited"),
+                    include_prompts=bool(include_prompts),
+                    max_prompt_chars=int(max_prompt_chars or 3000),
+                    top_logprobs=int(top_logprobs or 5),
+                    min_log_odds_gain=float(min_log_odds_gain),
+                    use_cache=bool(use_cache),
                     timeout_s=float(timeout_s or 60.0),
                 )
             except Exception as e:

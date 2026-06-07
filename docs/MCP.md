@@ -44,11 +44,13 @@ Berry persists the run state in `~/.berry/runs/<run_id>/` and also writes machin
 
 #### Verification
 
-- `detect_hallucination(answer, spans, verifier_model?, default_target?, max_claims?, claim_split?, require_citations?, context_mode?, include_prompts?)` — information-budget diagnostic per claim.
+- `detect_hallucination(answer, spans, verifier_model?, default_target?, max_claims?, claim_split?, require_citations?, context_mode?, include_prompts?, max_prompt_chars?, top_logprobs?, min_log_odds_gain?, use_cache?)` — information-budget diagnostic per claim.
   - `require_citations=true` will flag claims that have no citations even if they could be supported by the overall context.
+  - `context_mode="cited"` is the default and verifies each claim only against its cited spans.
   - `include_prompts=true` returns the exact verifier prompts used; useful for debugging custom verifiers.
-- `audit_trace_budget(steps, spans, verifier_model?, default_target?, require_citations?, context_mode?, include_prompts?)` — score explicit (claim, cites) steps.
-  - Also supports `require_citations` and (optionally) `include_prompts` for diagnostics.
+- `audit_trace_budget(steps, spans, verifier_model?, default_target?, require_citations?, context_mode?, include_prompts?, max_prompt_chars?, top_logprobs?, min_log_odds_gain?, use_cache?)` — score explicit (claim, cites) steps.
+  - The verifier is target-directed: cited context must push the posterior YES probability to `default_target`, and redacted context must not already support the claim.
+  - Deterministic preflight statuses such as `missing_citations`, `unknown_citations`, `empty_context`, and `no_spans` are returned without calling the verifier.
 
 ### Prompts (workflows)
 
