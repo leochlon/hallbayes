@@ -4,12 +4,15 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
-try:
+if TYPE_CHECKING:
     from openai import OpenAI
-except Exception:
-    OpenAI = None  # type: ignore
+else:
+    try:
+        from openai import OpenAI
+    except Exception:
+        OpenAI = None
 
 
 _thread_local = threading.local()

@@ -1,8 +1,40 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Set
+
+_LABEL_ALIASES = {
+    "YES": {"Y", "YES"},
+    "NO": {"N", "NO"},
+    "UNSURE": {"U", "UNSURE", "UNKNOWN"},
+}
+_LABEL_EDGE_RE = re.compile(r"^[^A-Za-z]*([A-Za-z]+)[^A-Za-z]*$")
+
+
+def canonical_answer_label(token: Any) -> Optional[str]:
+    """Map a verifier answer token to YES/NO/UNSURE.
+
+    The grouped verifier prompt uses one-character labels (Y/N/U) so each
+    claim-level answer is likely to occupy a single generated token. The legacy
+    single-claim prompt still uses YES/NO/UNSURE. This helper accepts both forms
+    and conservatively rejects decoded tokens that contain multiple alphabetic
+    runs, because those cannot provide one independent logprob distribution per
+    claim.
+    """
+
+    raw = str(token or "").strip()
+    if not raw:
+        return None
+    m = _LABEL_EDGE_RE.match(raw)
+    if not m:
+        return None
+    text = m.group(1).upper()
+    for label, aliases in _LABEL_ALIASES.items():
+        if text in aliases:
+            return label
+    return None
 
 
 def _as_dict(x: Any) -> Dict[str, Any]:
@@ -53,7 +85,7 @@ def _get_top_logprobs(obj: Any) -> List[Any]:
 
 @dataclass
 class TokenTopK:
-    """Top-K distribution at the answer-start token position."""
+    """Top-K distribution at one generated answer-label token position."""
 
     pos: int
     generated_token: str
@@ -62,27 +94,12 @@ class TokenTopK:
     kth_logprob: Optional[float]
 
 
-def extract_answer_topk(logprobs: Any) -> TokenTopK:
-    """Extract a top-K distribution for the first non-whitespace output token."""
-    if logprobs is None:
-        raise ValueError("logprobs is None; call the API with logprobs enabled")
-
-    seq = list(logprobs)
-    if not seq:
-        raise ValueError("empty logprobs list")
-
-    pos = 0
-    for i, tokinfo in enumerate(seq):
-        tok = _get_token(tokinfo)
-        if tok.strip() != "":
-            pos = i
-            break
-
+def _token_topk_at(seq: Sequence[Any], pos: int) -> TokenTopK:
     tokinfo = seq[pos]
     gen_tok = _get_token(tokinfo)
     gen_lp = _get_logprob(tokinfo)
     if gen_lp is None:
-        raise ValueError("missing logprob for generated token")
+        raise ValueError(f"missing logprob for generated token at position {pos}")
 
     top_list = _get_top_logprobs(tokinfo)
     topk: Dict[str, float] = {}
@@ -107,4 +124,91 @@ def extract_answer_topk(logprobs: Any) -> TokenTopK:
         generated_logprob=float(gen_lp),
         topk_logprobs=topk,
         kth_logprob=kth,
+    )
+
+
+def extract_answer_topk(logprobs: Any) -> TokenTopK:
+    """Extract a top-K distribution for the first non-whitespace output token."""
+    if logprobs is None:
+        raise ValueError("logprobs is None; call the API with logprobs enabled")
+
+    seq = list(logprobs)
+    if not seq:
+        raise ValueError("empty logprobs list")
+
+    pos = 0
+    for i, tokinfo in enumerate(seq):
+        tok = _get_token(tokinfo)
+        if tok.strip() != "":
+            pos = i
+            break
+
+    return _token_topk_at(seq, pos)
+
+
+def extract_label_topks(
+    logprobs: Any,
+    *,
+    labels: Sequence[str],
+    expected_count: Optional[int] = None,
+    exact: bool = False,
+) -> List[TokenTopK]:
+    """Extract top-K distributions at generated label-token positions.
+
+    Grouped verifier prompts emit one answer label per claim. The model may add
+    benign separators such as whitespace, bullets, or numbering, so this scans
+    the generated token stream and returns positions whose decoded token is one
+    of ``labels`` after conservative normalization.
+
+    With ``exact=True``, extra label-looking tokens are treated as an error.
+    That fail-closed behavior is important: if a grouped answer is verbose or
+    echoes labels from the prompt, callers should retry single-claim prompts
+    rather than risk shifting labels across claims.
+    """
+
+    if logprobs is None:
+        raise ValueError("logprobs is None; call the API with logprobs enabled")
+
+    seq = list(logprobs)
+    if not seq:
+        raise ValueError("empty logprobs list")
+
+    wanted: Set[str] = set()
+    for label in labels:
+        canonical = canonical_answer_label(label)
+        if canonical is not None:
+            wanted.add(canonical)
+    if not wanted:
+        raise ValueError("labels must contain at least one valid answer label")
+
+    out: List[TokenTopK] = []
+    for pos, tokinfo in enumerate(seq):
+        canonical = canonical_answer_label(_get_token(tokinfo))
+        if canonical not in wanted:
+            continue
+        out.append(_token_topk_at(seq, pos))
+
+    if expected_count is not None:
+        n = int(expected_count)
+        if n < 0:
+            raise ValueError("expected_count must be non-negative")
+        if exact and len(out) != n:
+            raise ValueError(f"expected exactly {n} label tokens, found {len(out)}")
+        if len(out) < n:
+            raise ValueError(f"expected at least {n} label tokens, found {len(out)}")
+        return out[:n]
+
+    return out
+
+
+def extract_answer_topks(logprobs: Any, expected: int) -> List[TokenTopK]:
+    """Extract one answer-label top-K distribution per claim in a grouped reply."""
+
+    if int(expected) < 1:
+        raise ValueError("expected must be positive")
+    return extract_label_topks(
+        logprobs,
+        labels=["Y", "N", "U", "YES", "NO", "UNSURE"],
+        expected_count=int(expected),
+        exact=True,
     )

@@ -44,11 +44,16 @@ Berry persists the run state in `~/.berry/runs/<run_id>/` and also writes machin
 
 #### Verification
 
-- `detect_hallucination(answer, spans, verifier_model?, default_target?, max_claims?, claim_split?, require_citations?, context_mode?, include_prompts?)` — information-budget diagnostic per claim.
+- `detect_hallucination(answer, spans, verifier_model?, default_target?, max_claims?, claim_split?, require_citations?, context_mode?, include_prompts?, max_prompt_chars?, top_logprobs?, min_log_odds_gain?, use_cache?, group_claims?, max_group_size?, max_group_prompt_chars?)` — information-budget diagnostic per claim.
   - `require_citations=true` will flag claims that have no citations even if they could be supported by the overall context.
-  - `include_prompts=true` returns the exact verifier prompts used; useful for debugging custom verifiers.
-- `audit_trace_budget(steps, spans, verifier_model?, default_target?, require_citations?, context_mode?, include_prompts?)` — score explicit (claim, cites) steps.
-  - Also supports `require_citations` and (optionally) `include_prompts` for diagnostics.
+  - `context_mode="cited"` is the default and verifies each claim only against its cited spans.
+  - `group_claims=true` is the default. Claims with the same verifier context are scored in one multi-claim prompt using one Y/N/U answer line per claim. If the grouped output cannot be parsed into exactly one answer distribution per claim, Berry automatically retries that group with legacy single-claim prompts.
+  - `max_group_size` defaults to `8`; `max_group_prompt_chars` defaults to `24000` and causes oversized chunks to split or fall back to single prompts.
+  - `include_prompts=true` returns the exact verifier prompt used. For grouped claims, this is the grouped prompt shared by the claims in that verifier call.
+- `audit_trace_budget(steps, spans, verifier_model?, default_target?, require_citations?, context_mode?, include_prompts?, max_prompt_chars?, top_logprobs?, min_log_odds_gain?, use_cache?, group_claims?, max_group_size?, max_group_prompt_chars?)` — score explicit (claim, cites) steps.
+  - The verifier is target-directed: cited context must push the posterior YES probability to `default_target`, and redacted context must not already support the claim.
+  - Deterministic preflight statuses such as `missing_citations`, `unknown_citations`, `empty_context`, and `no_spans` are returned without calling the verifier.
+  - Responses include both logical `verifier_calls` and estimated physical `verifier_api_calls_planned`; the latter reflects grouped prompt fanout and grouped-fallback retries.
 
 ### Prompts (workflows)
 
