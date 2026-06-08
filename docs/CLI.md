@@ -38,6 +38,41 @@ Safety note:
   If no `.git` is found, pass `--project-root` explicitly (or set `BERRY_ALLOW_NON_GIT_ROOT=1` to
   treat the current directory as the project scope).
 
+### `berry install`
+Install Berry into AI coding assistants using a platform-aware installer.
+
+```
+berry install [PLATFORM ...] [--platform PLATFORM] [--project] [--project-root PATH]
+              [--name berry] [--berry-command CMD] [--force] [--dry-run] [--json]
+              [--no-hooks] [--no-mcp] [--list-platforms]
+```
+
+Examples:
+
+```bash
+berry install                         # Claude Code, or Windows flavor on Windows
+berry install --platform codex
+berry install codex gemini cursor     # install multiple platforms
+berry codex install                   # platform shortcut
+berry cursor install --project
+berry install --platform gemini --dry-run --json
+```
+
+Supported platforms:
+
+`claude`, `windows`, `codebuddy`, `codex`, `opencode`, `kilo`, `copilot`,
+`vscode`, `aider`, `claw`, `droid`, `trae`, `trae-cn`, `gemini`, `hermes`,
+`kimi`, `amp`, `kiro`, `pi`, `cursor`, `devin`, `antigravity`.
+
+Notes:
+
+- Generated configs embed the resolved Berry command path. Re-run `berry install` after moving or upgrading Berry to refresh that path.
+- `--project` writes project-scoped artifacts where the platform supports them and requires a git repo unless `--project-root` or `BERRY_ALLOW_NON_GIT_ROOT=1` is supplied.
+- JSON config files are merged and fail closed on invalid JSON unless `--force` is passed.
+- `--no-hooks` skips hook registration. `--no-mcp` skips MCP config registration.
+
+See `docs/INSTALL.md` for the platform table and safety model.
+
 ### `berry doctor`
 Print health checks and basic environment info as JSON.
 

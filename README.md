@@ -18,10 +18,11 @@ Berry runs a local MCP server with a safe, repo‑scoped toolpack plus verificat
 Berry ships a single MCP surface: **classic**.
 
 Classic includes:
-- Verification tools (`detect_hallucination`, `audit_trace_budget`)
-- Run & evidence notebook tools (start/load runs, add/list/search spans)
+- Verification tools (`detect_hallucination`, `audit_trace_budget`) plus run-scoped variants that resolve evidence from the server-owned span ledger
+- Run & evidence notebook tools (start/load runs, add/list/query/extract/pack spans)
+- A claim/evidence graph (`create_claim`, `link_claim_evidence`, `audit_claims`, `list_audits`) persisted in an incremental, tamper-evident SQLite ledger
 
-See `docs/MCP.md` and `docs/workflows/README.md`.
+See `docs/MCP.md`, `docs/SPANS.md`, and `docs/workflows/README.md`.
 
 Berry integrates with Cursor, Codex, Claude Code, and Gemini CLI via config files committed to your repo.
 
@@ -56,6 +57,17 @@ This provisions a hosted API key, writes MCP configs for Cursor/Codex/Claude Cod
 
 3) Reload MCP servers in your client.
 
+For a platform-aware assistant installer with user/profile installs, platform
+shortcuts, hooks, always-on instruction files, and embedded path refreshes, use:
+
+```bash
+berry install --platform codex
+berry cursor install
+berry install --project --platform gemini
+```
+
+See `docs/INSTALL.md` for the full platform table.
+
 To use your own API key or a different backend instead of the hosted key:
 
 ```bash
@@ -66,8 +78,10 @@ berry setup
 
 - `docs/USAGE.md` — task‑oriented guides
 - `docs/CLI.md` — command reference
+- `docs/INSTALL.md` — multi-platform assistant installer
 - `docs/CONFIGURATION.md` — config files, defaults, and env vars
 - `docs/MCP.md` — tools/prompts and transport details
+- `docs/SPANS.md` — span-ledger model, incremental SQLite/event-log persistence, claim/evidence graph, evidence-pack policy, and server-resolved verification
 - `docs/PACKAGING.md` — release pipeline (macOS pkg + Homebrew cask)
 
 ## Tests

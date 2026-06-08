@@ -25,6 +25,7 @@ from .clients import (
     write_gemini_settings_json,
 )
 from .config import load_config, save_global_config
+from .installer import actions_to_json, format_actions, install_many, platform_keys
 from .integration import integrate, results_as_json
 from .mcp_server import main as mcp_classic_main
 from .paths import ensure_berry_home, license_path, mcp_env_path
@@ -220,6 +221,70 @@ def cmd_init(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"warn: auto-auth failed: {e}", file=sys.stderr)
     return 0
+
+
+def _resolve_project_root_for_install(args: argparse.Namespace) -> Path:
+    if getattr(args, "project_root", None):
+        return Path(args.project_root).expanduser().resolve()
+    project_root = _find_repo_root(Path.cwd())
+    allow_non_git = os.environ.get("BERRY_ALLOW_NON_GIT_ROOT", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+    if not (project_root / ".git").exists() and not allow_non_git:
+        raise SystemExit(
+            "Could not find a .git directory from the current working directory. "
+            "Run from inside a git repo, pass --project-root, or set BERRY_ALLOW_NON_GIT_ROOT=1."
+        )
+    return project_root
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    if bool(getattr(args, "list_platforms", False)):
+        for key in platform_keys():
+            print(key)
+        return 0
+
+    raw_platforms = list(getattr(args, "platforms", None) or [])
+    if not raw_platforms:
+        raw_platform = getattr(args, "platform", None) or "auto"
+        raw_platforms = [str(raw_platform)]
+    elif getattr(args, "platform", None):
+        raw_platforms.append(str(args.platform))
+
+    project = bool(getattr(args, "project", False))
+    scope = "project" if project else "user"
+    project_root = _resolve_project_root_for_install(args) if project else Path.cwd().resolve()
+
+    try:
+        actions = install_many(
+            raw_platforms,
+            scope=scope,  # type: ignore[arg-type]
+            project_dir=project_root,
+            force=bool(getattr(args, "force", False)),
+            dry_run=bool(getattr(args, "dry_run", False)),
+            berry_command_raw=getattr(args, "berry_command", None),
+            name=str(getattr(args, "name", "berry") or "berry"),
+            install_hooks=not bool(getattr(args, "no_hooks", False)),
+            install_mcp=not bool(getattr(args, "no_mcp", False)),
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if bool(getattr(args, "json", False)):
+        print(actions_to_json(actions), end="")
+    else:
+        print(format_actions(actions), end="")
+        failed = [a for a in actions if a.status == "failed"]
+        if not failed:
+            print(
+                "Done. Re-run `berry install` after moving/upgrading Berry to refresh embedded paths."
+            )
+
+    return 2 if any(a.status == "failed" for a in actions) else 0
 
 
 def cmd_doctor(_: argparse.Namespace) -> int:
@@ -1052,9 +1117,9 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--transport", choices=["stdio", "sse", "streamable-http"], default="stdio")
     mcp.add_argument(
         "--server",
-        # Berry now ships a single MCP surface (classic). We intentionally keep
-        # the flag for backwards compatibility with older configs that may still
-        # reference "science"/"forge"; those values are treated as aliases.
+        # Berry now ships a single MCP surface (classic). The flag is kept for
+        # backwards compatibility with older configs that may still reference
+        # "science"/"forge"; those values are treated as aliases.
         default="classic",
         help="Which MCP surface to expose (classic). Legacy values may be accepted for older configs.",
     )
@@ -1090,6 +1155,64 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not write .claude/rules/berry.md (Berry skill file)",
     )
     init.set_defaults(fn=cmd_init)
+
+    install = sub.add_parser(
+        "install",
+        help="Install Berry into an AI coding assistant (multi-platform installer)",
+    )
+    install.add_argument(
+        "platforms",
+        nargs="*",
+        help="Optional platform names. Defaults to auto (Claude Code, or Windows on win32).",
+    )
+    install.add_argument(
+        "--platform",
+        default=None,
+        help="Platform to install (aliases accepted). Use repeated positional names for multiple platforms.",
+    )
+    install.add_argument(
+        "--project",
+        action="store_true",
+        help="Install into the current project instead of the user profile where supported.",
+    )
+    install.add_argument(
+        "--project-root",
+        default=None,
+        help="Project root for --project installs (otherwise inferred from .git).",
+    )
+    install.add_argument("--name", default="berry", help="MCP server name to register")
+    install.add_argument(
+        "--berry-command",
+        default=None,
+        help="Command to embed in generated configs (default: resolved current berry executable).",
+    )
+    install.add_argument(
+        "--force", action="store_true", help="Repair invalid JSON files where safe"
+    )
+    install.add_argument(
+        "--dry-run", action="store_true", help="Show planned writes without writing"
+    )
+    install.add_argument("--json", action="store_true", help="Emit machine-readable action JSON")
+    install.add_argument("--no-hooks", action="store_true", help="Do not install assistant hooks")
+    install.add_argument("--no-mcp", action="store_true", help="Do not update MCP client configs")
+    install.add_argument("--list-platforms", action="store_true", help="Print supported platforms")
+    install.set_defaults(fn=cmd_install)
+
+    # Convenience aliases: `berry codex install`, `berry cursor install`, ...
+    for platform_name in platform_keys():
+        alias = sub.add_parser(platform_name, help=f"{platform_name} platform helpers")
+        alias_sub = alias.add_subparsers(dest=f"{platform_name}_cmd", required=True)
+        alias_install = alias_sub.add_parser("install", help=f"Install Berry for {platform_name}")
+        alias_install.add_argument("--project", action="store_true")
+        alias_install.add_argument("--project-root", default=None)
+        alias_install.add_argument("--name", default="berry")
+        alias_install.add_argument("--berry-command", default=None)
+        alias_install.add_argument("--force", action="store_true")
+        alias_install.add_argument("--dry-run", action="store_true")
+        alias_install.add_argument("--json", action="store_true")
+        alias_install.add_argument("--no-hooks", action="store_true")
+        alias_install.add_argument("--no-mcp", action="store_true")
+        alias_install.set_defaults(fn=cmd_install, platforms=[platform_name], platform=None)
 
     doc = sub.add_parser("doctor", help="Run health checks / self-test")
     doc.set_defaults(fn=cmd_doctor)

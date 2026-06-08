@@ -119,3 +119,31 @@ def test_upsert_codex_toml_overwrites_env_block(tmp_path: Path):
     assert updated.count("[mcp_servers.berry.env]") == 1
     assert '"OPENAI_API_KEY" = "new"' in updated
     assert '"OPENAI_API_KEY" = "old"' not in updated
+
+
+def test_upsert_codex_toml_preserves_unrelated_sections(tmp_path: Path):
+    codex_toml = tmp_path / ".codex" / "config.toml"
+    codex_toml.parent.mkdir(parents=True, exist_ok=True)
+    codex_toml.write_text(
+        (
+            "[mcp_servers.berry]\n"
+            'command = "old"\n'
+            'args = ["mcp"]\n'
+            "\n"
+            "[features]\n"
+            "multi_agent = false\n"
+            "experimental = true\n"
+            "\n"
+            "[user]\n"
+            'name = "me"\n'
+        ),
+        encoding="utf-8",
+    )
+    spec = McpServerSpec(name="berry", command="/abs/berry", args=["mcp"], env={})
+    _upsert_codex_toml(codex_toml, spec)
+    updated = codex_toml.read_text(encoding="utf-8")
+    assert "[features]" in updated
+    assert "experimental = true" in updated
+    assert "[user]" in updated
+    assert 'name = "me"' in updated
+    assert 'command = "/abs/berry"' in updated
