@@ -88,6 +88,7 @@ def test_claim_steps_use_open_claims_and_linked_supporting_evidence() -> None:
     assert steps[0]["cites"] == []
     assert steps[1]["cites"] == [span.sid]
 
+
 def test_claim_steps_do_not_pack_non_citable_background_anchors() -> None:
     store = RunStore()
     run = store.start_run(run_id="claims")

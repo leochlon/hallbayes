@@ -235,7 +235,7 @@ def run_from_payload(raw: Dict[str, Any], *, fallback_run_id: Optional[str] = No
 
     spans_raw = raw.get("spans") or {}
     if isinstance(spans_raw, dict):
-        span_iter = spans_raw.items()
+        span_iter: Iterable[tuple[str, Any]] = spans_raw.items()
     elif isinstance(spans_raw, list):
         span_iter = [
             (str(rec.get("sid") or f"S{i}"), rec)
@@ -305,14 +305,10 @@ def run_from_payload(raw: Dict[str, Any], *, fallback_run_id: Optional[str] = No
                     action=str(rec.get("action") or ""),
                     budget_minutes=float(rec.get("budget_minutes") or 0.0),
                     input_sids=[
-                        str(v).strip()
-                        for v in (rec.get("input_sids") or [])
-                        if str(v).strip()
+                        str(v).strip() for v in (rec.get("input_sids") or []) if str(v).strip()
                     ],
                     output_sids=[
-                        str(v).strip()
-                        for v in (rec.get("output_sids") or [])
-                        if str(v).strip()
+                        str(v).strip() for v in (rec.get("output_sids") or []) if str(v).strip()
                     ],
                     audit_status=str(rec.get("audit_status") or ""),
                     decision=str(rec.get("decision") or ""),
@@ -329,7 +325,7 @@ def run_from_payload(raw: Dict[str, Any], *, fallback_run_id: Optional[str] = No
 
     claims_raw = raw.get("claims") or {}
     if isinstance(claims_raw, dict):
-        claim_iter = claims_raw.items()
+        claim_iter: Iterable[tuple[str, Any]] = claims_raw.items()
     elif isinstance(claims_raw, list):
         claim_iter = [
             (str(rec.get("cid") or rec.get("claim_id") or f"C{i}"), rec)

@@ -277,9 +277,7 @@ class SpanRecord:
             "snapshot": dict(self.snapshot or {}),
             "parents": list(self.parents or []),
             "transform": (
-                dict(self.transform or {})
-                if isinstance(self.transform, dict)
-                else self.transform
+                dict(self.transform or {}) if isinstance(self.transform, dict) else self.transform
             ),
             "tags": list(self.tags or []),
             "preview": self.preview(limit=preview_chars, redact_sensitive=redact_sensitive),
@@ -289,9 +287,7 @@ class SpanRecord:
         }
         if include_text:
             data["text"] = (
-                "[REDACTED sensitive span]"
-                if redact_sensitive and self.is_sensitive
-                else self.text
+                "[REDACTED sensitive span]" if redact_sensitive and self.is_sensitive else self.text
             )
         return data
 

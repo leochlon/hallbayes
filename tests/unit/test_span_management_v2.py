@@ -70,9 +70,7 @@ def test_resolve_evidence_pack_excludes_non_citable_unsafe_and_unknown_spans() -
         run=run, sids=[tombstoned.sid], include_stale=True
     )
     assert tombstone_allowed["materialized_sids"] == []
-    assert tombstone_allowed["excluded"] == [
-        {"sid": tombstoned.sid, "reason": "status:tombstoned"}
-    ]
+    assert tombstone_allowed["excluded"] == [{"sid": tombstoned.sid, "reason": "status:tombstoned"}]
     assert pack["pack_id"]
     assert pack["text_sha256"]
 

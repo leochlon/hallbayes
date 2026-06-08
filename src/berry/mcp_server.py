@@ -62,13 +62,29 @@ from .permissions import can_read_path
 from .prompts import list_prompts
 from .run_ledger import (
     atomic_write_text as _ledger_atomic_write_text,
+)
+from .run_ledger import (
     attempts_tsv_path as _ledger_attempts_tsv_path,
+)
+from .run_ledger import (
     evidence_tsv_path as _ledger_evidence_tsv_path,
+)
+from .run_ledger import (
     load_persisted_run as _ledger_load_persisted_run,
+)
+from .run_ledger import (
     persist_run as _ledger_persist_run,
+)
+from .run_ledger import (
     run_dir as _ledger_run_dir,
+)
+from .run_ledger import (
     run_json_path as _ledger_run_json_path,
+)
+from .run_ledger import (
     run_sqlite_path as _ledger_run_sqlite_path,
+)
+from .run_ledger import (
     span_to_payload as _ledger_span_to_payload,
 )
 
@@ -212,7 +228,7 @@ def _extract_cited_sids(text: str) -> List[str]:
     return out
 
 
-def _collect_step_cites(steps: List[Dict[str, Any]]) -> List[str]:
+def _collect_step_cites(steps: List[Any]) -> List[str]:
     seen = set()
     out: List[str] = []
     for st in steps or []:
@@ -727,7 +743,6 @@ def create_server(
             except EnforcementError as exc:
                 raise RuntimeError(str(exc))
 
-
     @mcp.tool()
     def record_attempt(
         claim_id: str,
@@ -1167,7 +1182,7 @@ def create_server(
             if not isinstance(detail, dict):
                 continue
             try:
-                idx = int(detail.get("idx"))
+                idx = int(detail["idx"])
             except Exception:
                 continue
             out[idx] = detail
@@ -1218,7 +1233,7 @@ def create_server(
         *,
         run: RunState,
         kind: str,
-        steps: List[Dict[str, Any]],
+        steps: List[Any],
         pack: Dict[str, Any],
         report: Dict[str, Any],
         verifier_model: str,
@@ -1252,9 +1267,9 @@ def create_server(
                 "flagged": bool(report.get("flagged", True)),
                 "summary": dict(report.get("summary") or {}),
                 "details_sha256": hashlib.sha256(
-                    json.dumps(
-                        report.get("details") or [], sort_keys=True, default=str
-                    ).encode("utf-8")
+                    json.dumps(report.get("details") or [], sort_keys=True, default=str).encode(
+                        "utf-8"
+                    )
                 ).hexdigest(),
             },
             audit_sid=audit_sid,
