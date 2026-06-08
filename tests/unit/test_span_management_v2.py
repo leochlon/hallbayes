@@ -9,7 +9,7 @@ import pytest
 
 from berry.enforcement import EnforcementError, RunStore, SpanRecord
 from berry.mcp_server import _load_persisted_run, _persist_run, _run_json_path, _run_sqlite_path
-from berry.run_ledger import load_persisted_run, verify_event_hash_chain
+from berry.run_ledger import export_run, load_persisted_run, persist_run, verify_event_hash_chain
 
 
 def test_span_record_v2_classifies_anchor_and_redacts_secrets() -> None:
@@ -206,12 +206,43 @@ def test_persisted_run_round_trips_v2_span_fields(tmp_berry_home: Path) -> None:
     assert loaded.spans[child].parents == [parent.sid]
     assert loaded.spans[child].kind == "derived"
 
-    payload = json.loads((tmp_berry_home / "runs" / "roundtrip" / "run.json").read_text())
-    assert payload["schema_version"] == 3
-    assert payload["spans"][parent.sid]["text_sha256"] == parent.text_sha256
     assert _run_sqlite_path("roundtrip").exists()
-    assert verify_event_hash_chain(_run_sqlite_path("roundtrip"), "roundtrip")["events"] == 1
-    assert (tmp_berry_home / "runs" / "roundtrip" / "ledger_events.jsonl").exists()
+    with sqlite3.connect(_run_sqlite_path("roundtrip")) as con:
+        run_payload = json.loads(
+            con.execute(
+                "SELECT payload_json FROM runs WHERE run_id = ?", ("roundtrip",)
+            ).fetchone()[0]
+        )
+        row = con.execute(
+            "SELECT payload_json, payload_sha256 FROM spans WHERE run_id = ? AND sid = ?",
+            ("roundtrip", parent.sid),
+        ).fetchone()
+    assert run_payload["schema_version"] == 4
+    assert run_payload["payload_kind"] == "ledger_head"
+    assert run_payload["counts"]["spans"] == 2
+    assert "spans" not in run_payload
+    span_payload = json.loads(row[0])
+    assert hashlib.sha256(row[0].encode("utf-8")).hexdigest() == row[1]
+    assert span_payload["text_sha256"] == parent.text_sha256
+    chain = verify_event_hash_chain(_run_sqlite_path("roundtrip"), "roundtrip")
+    assert chain["events"] == 1
+    assert chain["saw_incremental"] is True
+
+
+def test_default_persist_keeps_exports_off_until_explicit_export(tmp_berry_home: Path) -> None:
+    store = RunStore()
+    run = store.start_run(run_id="export-off")
+    span = store.add_span(run=run, text="Measured latency is 42 ms.", source="metric")
+    _persist_run(run)
+
+    assert _run_sqlite_path("export-off").exists()
+    assert not _run_json_path("export-off").exists()
+
+    exported = export_run("export-off")
+    assert Path(exported["run_json"]).exists()
+    payload = json.loads(Path(exported["run_json"]).read_text(encoding="utf-8"))
+    assert payload["payload_kind"] == "full_export"
+    assert payload["spans"][span.sid]["text"] == span.text
 
 
 def test_persist_run_fails_closed_on_write_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -219,10 +250,10 @@ def test_persist_run_fails_closed_on_write_failure(monkeypatch: pytest.MonkeyPat
     run = store.start_run(run_id="fail")
     store.add_span(run=run, text="evidence", source="manual")
 
-    def boom(path, text):  # type: ignore[no-untyped-def]
+    def boom(con, run):  # type: ignore[no-untyped-def]
         raise OSError("disk full")
 
-    monkeypatch.setattr("berry.run_ledger.atomic_write_text", boom)
+    monkeypatch.setattr("berry.run_ledger._commit_incremental", boom)
     with pytest.raises(EnforcementError, match="Failed to persist run ledger"):
         _persist_run(run)
 
@@ -269,7 +300,7 @@ def test_sqlite_ledger_is_source_of_truth_when_json_export_is_missing(tmp_berry_
         assert con.execute("SELECT COUNT(*) FROM claim_evidence_links").fetchone()[0] == 1
         assert con.execute("SELECT COUNT(*) FROM audits").fetchone()[0] == 1
 
-    _run_json_path("sqlite-source").unlink()
+    _run_json_path("sqlite-source").unlink(missing_ok=True)
     loaded = load_persisted_run("sqlite-source")
     assert loaded.spans[span.sid].text == span.text
     assert loaded.claims[claim.cid].text == claim.text
@@ -337,7 +368,9 @@ def test_sqlite_normalized_table_tampering_fails_closed(tmp_berry_home: Path) ->
         )
         con.commit()
 
-    with pytest.raises(EnforcementError, match="span table is inconsistent"):
+    with pytest.raises(
+        EnforcementError, match="span table payload hash mismatch|span table is inconsistent"
+    ):
         _load_persisted_run("table-tamper")
 
 
@@ -367,5 +400,152 @@ def test_sqlite_head_event_must_commit_current_run_payload(tmp_berry_home: Path)
         )
         con.commit()
 
-    with pytest.raises(EnforcementError, match="head event does not match"):
+    with pytest.raises(
+        EnforcementError,
+        match="head event does not match|head event hash mismatch|Run payload hash mismatch",
+    ):
         _load_persisted_run("head-tamper")
+
+
+def test_incremental_ledger_appends_one_row_event_per_hot_span_commit(tmp_berry_home: Path) -> None:
+    store = RunStore()
+    run = store.start_run(run_id="incremental")
+
+    for i in range(12):
+        store.add_span(run=run, text=f"Fact {i}.", source="manual")
+        _persist_run(run)
+
+    sqlite_path = _run_sqlite_path("incremental")
+    with sqlite3.connect(sqlite_path) as con:
+        run_payload = json.loads(
+            con.execute(
+                "SELECT payload_json FROM runs WHERE run_id = ?", ("incremental",)
+            ).fetchone()[0]
+        )
+        event_payloads = [
+            json.loads(row[0])
+            for row in con.execute(
+                "SELECT payload_json FROM ledger_events WHERE run_id = ? ORDER BY event_id",
+                ("incremental",),
+            ).fetchall()
+        ]
+
+    assert run_payload["payload_kind"] == "ledger_head"
+    assert "spans" not in run_payload
+    assert len(event_payloads) == 12
+    assert event_payloads[0]["full_snapshot"] is True
+    assert all(payload["format"] == "incremental_v1" for payload in event_payloads)
+    assert all(len(payload["changes"]) == 1 for payload in event_payloads)
+    assert [payload["changes"][0]["id"] for payload in event_payloads] == [
+        f"S{i}" for i in range(12)
+    ]
+    assert verify_event_hash_chain(sqlite_path, "incremental")["events"] == 12
+
+
+def test_sqlite_row_hash_tampering_even_when_row_hash_is_recomputed_fails_closed(
+    tmp_berry_home: Path,
+) -> None:
+    store = RunStore()
+    run = store.start_run(run_id="row-hash-tamper")
+    span = store.add_span(run=run, text="original evidence", source="manual")
+    _persist_run(run)
+
+    sqlite_path = _run_sqlite_path("row-hash-tamper")
+    with sqlite3.connect(sqlite_path) as con:
+        payload_json = con.execute(
+            "SELECT payload_json FROM spans WHERE run_id = ? AND sid = ?",
+            ("row-hash-tamper", span.sid),
+        ).fetchone()[0]
+        payload = json.loads(payload_json)
+        payload["text"] = "tampered but row hash was recomputed"
+        mutated = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        con.execute(
+            "UPDATE spans SET payload_json = ?, payload_sha256 = ? WHERE run_id = ? AND sid = ?",
+            (
+                mutated,
+                hashlib.sha256(mutated.encode("utf-8")).hexdigest(),
+                "row-hash-tamper",
+                span.sid,
+            ),
+        )
+        con.commit()
+
+    with pytest.raises(EnforcementError, match="span table is inconsistent with ledger event log"):
+        _load_persisted_run("row-hash-tamper")
+
+
+def test_clean_persist_does_not_heal_external_ledger_tampering(tmp_berry_home: Path) -> None:
+    store = RunStore()
+    run = store.start_run(run_id="no-heal")
+    span = store.add_span(run=run, text="original evidence", source="manual")
+    _persist_run(run)
+
+    sqlite_path = _run_sqlite_path("no-heal")
+    with sqlite3.connect(sqlite_path) as con:
+        payload_json = con.execute(
+            "SELECT payload_json FROM spans WHERE run_id = ? AND sid = ?",
+            ("no-heal", span.sid),
+        ).fetchone()[0]
+        payload = json.loads(payload_json)
+        payload["text"] = "tampered durable row"
+        mutated = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        con.execute(
+            "UPDATE spans SET payload_json = ?, payload_sha256 = ? WHERE run_id = ? AND sid = ?",
+            (
+                mutated,
+                hashlib.sha256(mutated.encode("utf-8")).hexdigest(),
+                "no-heal",
+                span.sid,
+            ),
+        )
+        con.commit()
+
+    with pytest.raises(EnforcementError, match="span table is inconsistent with ledger event log"):
+        persist_run(run)
+
+
+def test_explicit_export_run_regenerates_full_json_and_tsv_snapshots(tmp_berry_home: Path) -> None:
+    store = RunStore()
+    run = store.start_run(run_id="exportable")
+    span = store.add_span(run=run, text="exported evidence", source="manual")
+    _persist_run(run)
+
+    assert not _run_json_path("exportable").exists()
+    result = export_run("exportable")
+
+    assert result["mode"] == "sync"
+    payload = json.loads(_run_json_path("exportable").read_text())
+    assert payload["payload_kind"] == "full_export"
+    assert payload["spans"][span.sid]["text"] == "exported evidence"
+    assert (tmp_berry_home / "runs" / "exportable" / "evidence.tsv").exists()
+
+
+def test_dirty_write_fails_if_target_row_was_tampered_since_load(tmp_berry_home: Path) -> None:
+    store = RunStore()
+    run = store.start_run(run_id="dirty-row-tamper")
+    span = store.add_span(run=run, text="original evidence", source="manual")
+    _persist_run(run)
+
+    sqlite_path = _run_sqlite_path("dirty-row-tamper")
+    with sqlite3.connect(sqlite_path) as con:
+        payload_json = con.execute(
+            "SELECT payload_json FROM spans WHERE run_id = ? AND sid = ?",
+            ("dirty-row-tamper", span.sid),
+        ).fetchone()[0]
+        payload = json.loads(payload_json)
+        payload["text"] = "tampered durable row"
+        mutated = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        con.execute(
+            "UPDATE spans SET payload_json = ?, payload_sha256 = ? WHERE run_id = ? AND sid = ?",
+            (
+                mutated,
+                hashlib.sha256(mutated.encode("utf-8")).hexdigest(),
+                "dirty-row-tamper",
+                span.sid,
+            ),
+        )
+        con.commit()
+
+    store.mark_span(run=run, sid=span.sid, tags_add=["reviewed"])
+    with pytest.raises(EnforcementError, match="changed since this run was loaded"):
+        persist_run(run)

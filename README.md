@@ -20,7 +20,7 @@ Berry ships a single MCP surface: **classic**.
 Classic includes:
 - Verification tools (`detect_hallucination`, `audit_trace_budget`) plus run-scoped variants that resolve evidence from the server-owned span ledger
 - Run & evidence notebook tools (start/load runs, add/list/query/extract/pack spans)
-- A claim/evidence graph (`create_claim`, `link_claim_evidence`, `audit_claims`, `list_audits`) persisted in a SQLite ledger
+- A claim/evidence graph (`create_claim`, `link_claim_evidence`, `audit_claims`, `list_audits`) persisted in an incremental, tamper-evident SQLite ledger
 
 See `docs/MCP.md`, `docs/SPANS.md`, and `docs/workflows/README.md`.
 
@@ -81,7 +81,7 @@ berry setup
 - `docs/INSTALL.md` — multi-platform assistant installer
 - `docs/CONFIGURATION.md` — config files, defaults, and env vars
 - `docs/MCP.md` — tools/prompts and transport details
-- `docs/SPANS.md` — span-ledger model, SQLite/event-log persistence, claim/evidence graph, evidence-pack policy, and server-resolved verification
+- `docs/SPANS.md` — span-ledger model, incremental SQLite/event-log persistence, claim/evidence graph, evidence-pack policy, and server-resolved verification
 - `docs/PACKAGING.md` — release pipeline (macOS pkg + Homebrew cask)
 
 ## Tests

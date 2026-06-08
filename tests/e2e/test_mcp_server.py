@@ -49,6 +49,7 @@ async def test_mcp_server_tools_and_prompts(tmp_repo: Path, tmp_berry_home: Path
             assert "start_run" in tool_names
             assert "load_run" in tool_names
             assert "get_deliverable" in tool_names
+            assert "export_run_ledger" in tool_names
 
             # Evidence span tools
             assert "add_span" in tool_names
@@ -247,7 +248,12 @@ async def test_mcp_server_run_and_spans(tmp_repo: Path, tmp_berry_home: Path):
             assert load_r.isError is False
             assert load_r.structuredContent["result"]["run_id"] == run_id
 
-            # Persistence side-effects should include machine-readable ledgers.
+            # Persistence side-effects should include the authoritative SQLite ledger.
             run_dir = tmp_berry_home / "runs" / run_id
+            assert (run_dir / "run.sqlite").exists()
+
+            # Full inspection exports are explicit so long span sessions stay fast.
+            exp = await session.call_tool("export_run_ledger", {"run_id": run_id})
+            assert exp.isError is False
             assert (run_dir / "evidence.tsv").exists()
             assert (run_dir / "attempts.tsv").exists()

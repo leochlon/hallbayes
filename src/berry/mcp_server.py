@@ -8,6 +8,7 @@ Approved MCP tools only:
 - start_run
 - load_run
 - get_deliverable
+- export_run_ledger
 - add_span
 - add_file_span
 - record_attempt
@@ -68,6 +69,9 @@ from .run_ledger import (
 )
 from .run_ledger import (
     evidence_tsv_path as _ledger_evidence_tsv_path,
+)
+from .run_ledger import (
+    export_run as _ledger_export_run,
 )
 from .run_ledger import (
     load_persisted_run as _ledger_load_persisted_run,
@@ -475,7 +479,7 @@ def create_server(
                     "ledger_path": str(_run_sqlite_path(run.run_id)),
                     "problem_sid": ps.sid,
                     "deliverable_sid": dv.sid,
-                    "schema_version": 3,
+                    "schema_version": 4,
                     "baseline_kind": run.baseline_kind,
                     "baseline_ref": run.baseline_ref,
                 }
@@ -532,6 +536,19 @@ def create_server(
                 "text": rec.text,
                 "meta": rec.meta,
             }
+
+    @mcp.tool()
+    def export_run_ledger(run_id: Optional[str] = None) -> Dict[str, Any]:
+        """Regenerate full JSON/TSV inspection exports from the authoritative SQLite ledger."""
+        with _redirect_stdout_to_stderr():
+            try:
+                run = store.get_run(run_id)
+                _persist_run(run)
+                return _ledger_export_run(run.run_id)
+            except EnforcementError as exc:
+                raise RuntimeError(str(exc))
+            except Exception as exc:
+                raise RuntimeError(f"Failed to export run ledger: {type(exc).__name__}: {exc}")
 
     # -----------------------------
     # Evidence spans
@@ -977,7 +994,7 @@ def create_server(
             run = store.get_run(run_id)
             return {
                 "run_id": run.run_id,
-                "schema_version": 3,
+                "schema_version": 4,
                 "spans": store.list_spans(
                     run=run,
                     limit=int(limit or 200),

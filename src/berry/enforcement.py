@@ -6,7 +6,7 @@ import re
 import secrets
 import time
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 
 class EnforcementError(Exception):
@@ -157,6 +157,63 @@ def _normalise_tags(tags: Optional[Iterable[str]]) -> List[str]:
         seen.add(tag)
         out.append(tag)
     return out
+
+
+def mark_run_dirty(
+    run: "RunState",
+    *,
+    all: bool = False,
+    meta: bool = False,
+    spans: Optional[Iterable[str]] = None,
+    attempts: Optional[Iterable[str]] = None,
+    claims: Optional[Iterable[str]] = None,
+    claim_links: Optional[Iterable[str]] = None,
+    audits: Optional[Iterable[str]] = None,
+) -> None:
+    """Mark ledger rows that must be durably re-committed.
+
+    The SQLite ledger persists hot writes incrementally.  RunStore mutation
+    methods call this helper so ``persist_run`` can avoid reserializing and
+    reinserting every child row on every span append.  Direct users that mutate
+    ``RunState`` fields outside RunStore should either call this helper or force
+    a full checkpoint through the ledger layer.
+    """
+
+    if all:
+        run.ledger_dirty_all = True
+        meta = True
+    if meta:
+        run.ledger_dirty_meta = True
+    for sid in spans or []:
+        value = str(sid or "").strip()
+        if value:
+            run.ledger_dirty_spans.add(value)
+    for attempt_id in attempts or []:
+        value = str(attempt_id or "").strip()
+        if value:
+            run.ledger_dirty_attempts.add(value)
+    for cid in claims or []:
+        value = str(cid or "").strip()
+        if value:
+            run.ledger_dirty_claims.add(value)
+    for link_id in claim_links or []:
+        value = str(link_id or "").strip()
+        if value:
+            run.ledger_dirty_claim_links.add(value)
+    for audit_id in audits or []:
+        value = str(audit_id or "").strip()
+        if value:
+            run.ledger_dirty_audits.add(value)
+
+
+def clear_run_dirty(run: "RunState") -> None:
+    run.ledger_dirty_all = False
+    run.ledger_dirty_meta = False
+    run.ledger_dirty_spans.clear()
+    run.ledger_dirty_attempts.clear()
+    run.ledger_dirty_claims.clear()
+    run.ledger_dirty_claim_links.clear()
+    run.ledger_dirty_audits.clear()
 
 
 @dataclass(frozen=True)
@@ -566,6 +623,21 @@ class RunState:
     # This is *not* evidence by itself, but it captures the user's goal.
     deliverable_sid: Optional[str] = None
 
+    # Incremental ledger bookkeeping. These fields are intentionally not serialized
+    # into run payloads; they describe what the in-memory object has changed since
+    # the last durable commit. Newly created runs start dirty so the first persist
+    # writes a full baseline event. Loaded runs are marked clean by the ledger.
+    ledger_dirty_all: bool = field(default=True, repr=False)
+    ledger_dirty_meta: bool = field(default=True, repr=False)
+    ledger_dirty_spans: Set[str] = field(default_factory=set, repr=False)
+    ledger_dirty_attempts: Set[str] = field(default_factory=set, repr=False)
+    ledger_dirty_claims: Set[str] = field(default_factory=set, repr=False)
+    ledger_dirty_claim_links: Set[str] = field(default_factory=set, repr=False)
+    ledger_dirty_audits: Set[str] = field(default_factory=set, repr=False)
+    ledger_committed_head_event_hash: str = field(default="", repr=False)
+    ledger_committed_run_meta_sha256: str = field(default="", repr=False)
+    ledger_committed_row_hashes: Dict[str, Dict[str, str]] = field(default_factory=dict, repr=False)
+
 
 class RunStore:
     def __init__(self):
@@ -632,6 +704,7 @@ class RunStore:
 
         # Classic: clear deliverable anchor.
         run.deliverable_sid = None
+        mark_run_dirty(run, all=True)
         return run
 
     def record_attempt(
@@ -689,6 +762,7 @@ class RunStore:
         )
         run.next_attempt_idx += 1
         run.attempts.append(rec)
+        mark_run_dirty(run, meta=True, attempts=[rec.attempt_id])
         return rec
 
     def list_attempts(self, *, run: RunState, limit: int = 200) -> List[Dict[str, Any]]:
@@ -759,6 +833,7 @@ class RunStore:
         )
         run.claims[rec.cid] = rec
         run.claim_order.append(rec.cid)
+        mark_run_dirty(run, meta=True, claims=[rec.cid])
         return rec
 
     def get_claim(self, *, run: RunState, cid: str) -> ClaimRecord:
@@ -808,6 +883,7 @@ class RunStore:
             meta=meta,
         )
         run.claims[rec.cid] = updated
+        mark_run_dirty(run, meta=True, claims=[rec.cid])
         return updated
 
     def list_claims(
@@ -887,6 +963,7 @@ class RunStore:
         )
         run.next_claim_link_idx += 1
         run.claim_evidence_links.append(link)
+        mark_run_dirty(run, meta=True, claim_links=[link.link_id])
         return link
 
     def list_claim_evidence(
@@ -973,6 +1050,7 @@ class RunStore:
         )
         run.next_audit_idx += 1
         run.audits.append(audit)
+        mark_run_dirty(run, meta=True, audits=[audit.audit_id])
         return audit
 
     def list_audits(
@@ -1104,6 +1182,7 @@ class RunStore:
         run.spans[sid] = rec
         run.span_order.append(sid)
         run.spans_version += 1
+        mark_run_dirty(run, meta=True, spans=[sid])
         return rec
 
     def list_spans(
@@ -1183,6 +1262,7 @@ class RunStore:
         )
         run.spans[rec.sid] = updated
         run.spans_version += 1
+        mark_run_dirty(run, meta=True, spans=[rec.sid])
         return updated
 
     def extract_span(

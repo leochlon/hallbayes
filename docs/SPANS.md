@@ -97,10 +97,17 @@ If the file is modified in the working tree and the span is captured from the wo
 
 ## Persistence and ledgers
 
-Berry persists run state under:
+Berry persists authoritative run state under:
 
 ```text
 ~/.berry/runs/<run_id>/run.sqlite
+```
+
+`run.sqlite` is the source of truth. It stores normalized tables for runs, spans, attempts, claims, claim/evidence links, audits, and a tamper-evident `ledger_events` table. Hot writes are incremental: a span append upserts only the changed row, stores that row's payload hash, and appends a hash-chained `state_committed` event containing the changed row hash plus the current run metadata hash. Load reconstructs the expected table state by replaying the event chain and fails closed if row payloads, row hashes, metadata hashes, table positions, event payloads, or event-chain links do not match.
+
+Inspection exports are deliberately separated from the hot commit path. By default, Berry does not rewrite full JSON/TSV snapshots after every span because that makes long sessions O(n²). Use the MCP tool `export_run_ledger` or set `BERRY_LEDGER_EXPORT_MODE=sync` when a legacy consumer needs:
+
+```text
 ~/.berry/runs/<run_id>/run.json
 ~/.berry/runs/<run_id>/evidence.tsv
 ~/.berry/runs/<run_id>/attempts.tsv
@@ -110,11 +117,9 @@ Berry persists run state under:
 ~/.berry/runs/<run_id>/ledger_events.jsonl
 ```
 
-`run.sqlite` is now the source of truth. It stores normalized tables for runs, spans, attempts, claims, claim/evidence links, audits, and a tamper-evident `ledger_events` table. Every successful commit appends a snapshot event with a chained event hash and payload hash, so load fails closed if the event log is corrupted or manually edited.
+`BERRY_LEDGER_EXPORT_MODE=hot` writes lightweight head / append-only mirrors on each commit. `BERRY_LEDGER_EXPORT_MODE=off` is the default and keeps the SQLite ledger as the only authoritative hot-path artifact. Legacy JSON-only runs still load and are migrated into the v4 SQLite ledger.
 
-`run.json` and the TSV files are compatibility / inspection exports. They are still written atomically and schema-versioned, but once `run.sqlite` exists the loader prefers SQLite. If a legacy run only has `run.json`, Berry loads it and migrates the in-memory state into the v3 schema.
-
-Persistence failures fail closed with a visible error instead of being silently swallowed. SQLite writes use an IMMEDIATE transaction with WAL mode, foreign keys, payload hashes, and dangling-edge validation.
+Persistence failures fail closed with a visible error instead of being silently swallowed. SQLite writes use an IMMEDIATE transaction with WAL mode, foreign keys, row payload hashes, event-chain verification, cached per-process write connections, and dangling-edge validation.
 
 ## Claim/evidence graph
 

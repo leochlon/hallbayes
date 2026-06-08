@@ -21,6 +21,7 @@ Berry exposes a focused set of tools for evidence collection, attempt ledgers, a
 - `start_run(problem_statement, deliverable, run_id?)` — create a new run directory with a problem statement + immutable deliverable anchor.
 - `load_run(run_id)` — resume an existing run (loads from disk if necessary) and set it active.
 - `get_deliverable(run_id?)` — get the immutable deliverable anchor for the active run.
+- `export_run_ledger(run_id?)` — regenerate full JSON/TSV inspection exports from the authoritative SQLite ledger.
 
 #### Evidence spans
 
@@ -41,12 +42,9 @@ Berry exposes a focused set of tools for evidence collection, attempt ledgers, a
   - Supports claim/action basics plus optional `git_state`, `objective_metric`, `objective_value`, and `result_summary` fields.
 - `list_attempts(run_id?, limit?)` — list recorded attempts for the active run.
 
-Berry persists the run state in `~/.berry/runs/<run_id>/` and also writes machine-readable ledgers:
-- `run.sqlite` — SQLite source of truth with normalized runs/spans/attempts/claims/links/audits and a tamper-evident `ledger_events` table
-- `run.json` — schema-versioned compatibility export containing v3 state
-- `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, `ledger_events.jsonl` — inspection exports
+Berry persists the authoritative run state in `~/.berry/runs/<run_id>/run.sqlite`. The SQLite ledger uses normalized runs/spans/attempts/claims/links/audits tables plus a tamper-evident `ledger_events` table. Hot writes are incremental: only changed rows are upserted, each row carries a payload hash, and each commit appends a hash-chained state event.
 
-SQLite writes use a transaction, WAL mode, foreign keys, payload hashes, and event-hash chain verification. Export writes are atomic and persistence failures fail closed with a visible error. Legacy JSON-only runs still load and migrate in memory.
+Full JSON/TSV inspection exports are no longer regenerated on every span append by default. Use `export_run_ledger(run_id?)` or set `BERRY_LEDGER_EXPORT_MODE=sync` to write `run.json`, `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, and `ledger_events.jsonl` for legacy consumers. `BERRY_LEDGER_EXPORT_MODE=hot` writes lightweight head / append-only mirrors on each commit; the default is `off`. Legacy JSON-only runs still load and migrate into SQLite.
 
 See `docs/SPANS.md` for the full span schema, evidence-pack policy, and trust model.
 
