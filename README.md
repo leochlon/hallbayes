@@ -10,14 +10,32 @@ It flags unsupported claims at 0.82 to 0.93 AUROC across grounding benchmarks, i
 
 Agents assert things their context does not support. A claim can be true in the world yet ungrounded in the evidence the model was given, and world-truth fact-checkers miss exactly that case. Berry measures grounding directly: the information sufficiency of the cited evidence for each claim.
 
-## Quickstart
+## Install
 
 ```bash
 pipx install -e .   # install
 berry init          # in each repo: provisions a key, writes MCP + skill configs
 ```
 
-Then reload MCP servers in your client. To use your own key or a different backend, run `berry setup`.
+Reload MCP servers in your client afterward. To use your own key or a different backend, run `berry setup`.
+
+`berry install` registers Berry with a specific assistant. It writes a skill file, an always-on instruction file or managed section (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/berry.mdc`), and MCP config plus hooks where the host exposes them. Generated artifacts embed the resolved `berry` path, so re-run it after reinstalling Berry or moving its environment.
+
+| Assistant | Command |
+|---|---|
+| Claude Code | `berry install` |
+| Codex | `berry install --platform codex` |
+| Cursor | `berry cursor install` |
+| Gemini CLI | `berry install --platform gemini` |
+| GitHub Copilot CLI | `berry install --platform copilot` |
+| VS Code Copilot Chat | `berry vscode install` |
+| Aider | `berry install --platform aider` |
+| Amp | `berry amp install` |
+| Kiro | `berry kiro install` |
+| Devin | `berry devin install` |
+| Anything else | `berry install --list-platforms` |
+
+By default `berry install` writes user-profile config; pass `--project` to install into the current repo (requires a git repo unless `BERRY_ALLOW_NON_GIT_ROOT=1`). The full platform list, flags, and the idempotent-write safety model are in [`docs/INSTALL.md`](docs/INSTALL.md).
 
 ## Usage
 
@@ -101,7 +119,7 @@ Each playbook has a before/after worked example (uncited output vs evidence-back
 
 - `docs/USAGE.md`: task-oriented guides
 - `docs/CLI.md`: command reference
-- `docs/INSTALL.md`: multi-platform assistant installer
+- `docs/INSTALL.md`: full platform list, installer flags, scopes, and safety model
 - `docs/CONFIGURATION.md`: config files, defaults, env vars
 - `docs/MCP.md`: tools, prompts, transport
 - `docs/SPANS.md`: span-ledger model, incremental SQLite/event-log persistence, claim/evidence graph, evidence-pack policy
