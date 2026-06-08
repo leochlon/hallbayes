@@ -11,3 +11,4 @@ dist/
 .pdf_screens/
 .tmp_arxiv/
 .venv-pdf/
+.venv_v2/

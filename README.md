@@ -123,7 +123,6 @@ Each playbook has a before/after worked example (uncited output vs evidence-back
 - `docs/CONFIGURATION.md`: config files, defaults, env vars
 - `docs/MCP.md`: tools, prompts, transport
 - `docs/SPANS.md`: span-ledger model, incremental SQLite/event-log persistence, claim/evidence graph, evidence-pack policy
-- `docs/PACKAGING.md`: release pipeline
 
 ## Tests
 

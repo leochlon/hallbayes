@@ -8,7 +8,7 @@ The installer writes three kinds of artifacts, depending on the platform:
 2. an always-on instruction file or managed section (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/berry.mdc`, etc.);
 3. MCP client config and hooks where the host exposes a stable config surface.
 
-Generated artifacts embed the resolved Berry command path. Re-run `berry install` after reinstalling Berry, moving a `pipx`/`uv` environment, replacing a PyInstaller binary, or changing Python versions. The installer will idempotently refresh the embedded path without duplicating Berry sections.
+Generated artifacts embed the resolved Berry command path. Re-run `berry install` after reinstalling Berry, moving a `pipx`/`uv` environment, or changing Python versions. The installer will idempotently refresh the embedded path without duplicating Berry sections.
 
 ## Pick your platform
 

@@ -102,9 +102,8 @@ def _resolve_invocation(raw: str | None = None) -> tuple[str, ...]:
 
     Preference order:
     1. explicit --berry-command, parsed as a shell command;
-    2. the frozen executable, for PyInstaller/pkg builds;
-    3. an absolute berry CLI discovered on PATH;
-    4. sys.executable -m berry, which is safe for editable/source installs.
+    2. an absolute berry CLI discovered on PATH;
+    3. sys.executable -m berry, which is safe for editable/source installs.
     """
 
     if raw is not None and raw.strip():
@@ -112,8 +111,6 @@ def _resolve_invocation(raw: str | None = None) -> tuple[str, ...]:
         if not parts:
             raise ValueError("--berry-command parsed to an empty command")
         return parts
-    if getattr(sys, "frozen", False):  # PyInstaller / single-file binary
-        return (str(Path(sys.executable).resolve()),)
     found = shutil.which("berry")
     if found:
         return (str(Path(found).resolve()),)
