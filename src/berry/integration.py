@@ -66,8 +66,12 @@ def _upsert_codex_toml(path: Path, spec: McpServerSpec) -> None:
 
     import re
 
+    # Remove only Berry's own MCP sections. The previous pattern stopped only
+    # at the next [mcp_servers.*] section, which could accidentally consume
+    # unrelated TOML sections (for example [features]) that followed Berry's
+    # block. Stop at any next TOML section instead.
     pat = re.compile(
-        rf"^\[mcp_servers\.{re.escape(spec.name)}(?:\.env)?\]\n(?:.*\n)*?(?=^\[mcp_servers\.|\Z)",
+        rf"^\[mcp_servers\.{re.escape(spec.name)}(?:\.env)?\]\s*\n(?:.*\n)*?(?=^\[|\Z)",
         re.M,
     )
     new_text = pat.sub("", text).rstrip()
