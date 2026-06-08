@@ -37,12 +37,18 @@ DECOMP_PROMPT = (
 def _chat(content: str, max_tokens: int) -> str:
     base = os.environ["OPENAI_BASE_URL"].rstrip("/")
     body = json.dumps(
-        {"model": MODEL, "messages": [{"role": "user", "content": content}],
-         "max_tokens": max_tokens, "temperature": 0}
+        {
+            "model": MODEL,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": max_tokens,
+            "temperature": 0,
+        }
     ).encode()
     req = urllib.request.Request(
-        base + "/chat/completions", data=body,
-        headers={"Content-Type": "application/json", "Authorization": "Bearer proxy"})
+        base + "/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json", "Authorization": "Bearer proxy"},
+    )
     r = json.load(urllib.request.urlopen(req, timeout=90))
     return r["choices"][0]["message"]["content"]
 
@@ -59,8 +65,13 @@ def decompose(output: str) -> list[str]:
 
 def verify(claim: str, context: str) -> dict:
     r = run_detect_hallucination(
-        answer=claim, spans=[{"sid": "S1", "text": context}],
-        verifier_model=MODEL, context_mode="all", max_concurrency=1, timeout_s=90)
+        answer=claim,
+        spans=[{"sid": "S1", "text": context}],
+        verifier_model=MODEL,
+        context_mode="all",
+        max_concurrency=1,
+        timeout_s=90,
+    )
     d = (r.get("details") or [{}])[0]
     gap = (d.get("budget_gap") or {}).get("min")
     return {"score": float(gap) if gap is not None else 0.0, "flagged": bool(d.get("flagged"))}
@@ -101,9 +112,16 @@ def prf(pred, labels):
     fn = sum(1 for p, y in zip(pred, labels) if p == 0 and y == 1)
     tn = sum(1 for p, y in zip(pred, labels) if p == 0 and y == 0)
     prec, rec = tp / max(1, tp + fp), tp / max(1, tp + fn)
-    return {"acc": round((tp + tn) / max(1, len(labels)), 3), "prec": round(prec, 3),
-            "rec": round(rec, 3), "f1": round(2 * prec * rec / max(1e-9, prec + rec), 3),
-            "tp": tp, "fp": fp, "fn": fn, "tn": tn}
+    return {
+        "acc": round((tp + tn) / max(1, len(labels)), 3),
+        "prec": round(prec, 3),
+        "rec": round(rec, 3),
+        "f1": round(2 * prec * rec / max(1e-9, prec + rec), 3),
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
+    }
 
 
 def main():
@@ -123,7 +141,9 @@ def main():
         for fut in as_completed(futs):
             claims_by_resp[futs[fut]] = fut.result()
     total_claims = sum(len(c) for c in claims_by_resp)
-    print(f"  {total_claims} atomic claims (mean {total_claims/len(rows):.1f}/response)", flush=True)
+    print(
+        f"  {total_claims} atomic claims (mean {total_claims / len(rows):.1f}/response)", flush=True
+    )
 
     # Phase 2: verify every atomic claim (flattened)
     flat = [(i, c) for i, cs in enumerate(claims_by_resp) for c in cs]
@@ -146,9 +166,15 @@ def main():
     out = []
     for i, r in enumerate(rows):
         sc = agg[i]["scores"] or [0.0]
-        out.append({"id": r.get("id"), "label": label_of(r),
-                    "n_claims": len(claims_by_resp[i]),
-                    "score": max(sc), "flagged": any(agg[i]["flags"])})
+        out.append(
+            {
+                "id": r.get("id"),
+                "label": label_of(r),
+                "n_claims": len(claims_by_resp[i]),
+                "score": max(sc),
+                "flagged": any(agg[i]["flags"]),
+            }
+        )
     with open(args.out, "w") as f:
         for r in out:
             f.write(json.dumps(r) + "\n")
@@ -157,7 +183,9 @@ def main():
     scores = [r["score"] for r in out]
     flagged = [1 if r["flagged"] else 0 for r in out]
     print("\n==== BERRY v2 GROUNDING on RAGTruth (ATOMIC decomposition) ====")
-    print(f"responses={len(out)}  base rate={sum(labels)/len(labels):.2f}  atomic claims/resp={total_claims/len(rows):.1f}")
+    print(
+        f"responses={len(out)}  base rate={sum(labels) / len(labels):.2f}  atomic claims/resp={total_claims / len(rows):.1f}"
+    )
     print(f"AUROC = {auroc(scores, labels):.3f}   AURC = {aurc(scores, labels):.3f}")
     print(f"decision @target 0.95 : {prf(flagged, labels)}")
     print("(compare sentence-split run: AUROC 0.810, prec 0.374, rec 0.937)")
