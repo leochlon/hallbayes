@@ -23,7 +23,7 @@ The job is not to produce a plausible answer. The job is to resolve the user's q
 ## Mandatory external state
 - Start or load a run before substantive work.
 - All evidence must be stored as real spans in the active run.
-- The run directory is the working memory: `run.json`, `evidence.tsv`, and `attempts.tsv`.
+- The run directory is the working memory: `run.sqlite` plus the JSON/TSV exports (`run.json`, `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, `ledger_events.jsonl`).
 - Before each iteration, re-read `list_spans` and `list_attempts`.
 - Record every evidence-gathering move, experiment, audit result, and downgrade in the attempt ledger. Negative results are evidence.
 
@@ -189,7 +189,7 @@ Move fast, but never let assumptions masquerade as facts. The prototype must eme
 ## Mandatory external state
 - Start or load a run before substantive work.
 - All requirements, constraints, repo context, benchmarks, and spike results must be stored as real spans in the active run.
-- The run directory is the working memory: `run.json`, `evidence.tsv`, and `attempts.tsv`.
+- The run directory is the working memory: `run.sqlite` plus the JSON/TSV exports (`run.json`, `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, `ledger_events.jsonl`).
 - Before each iteration, re-read `list_spans` and `list_attempts`.
 - Record every evidence-gathering action, spike, benchmark, architectural hypothesis, and downgrade in the attempt ledger.
 
@@ -279,7 +279,7 @@ This is the generalized form of the program-style experiment loop: baseline -> h
 ## Mandatory external state
 - Start or load a run before substantive work.
 - All evidence, measurements, benchmarks, logs, repros, and diffs must be stored as real spans in the active run.
-- The run directory is the working memory: `run.json`, `evidence.tsv`, and `attempts.tsv`.
+- The run directory is the working memory: `run.sqlite` plus the JSON/TSV exports (`run.json`, `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, `ledger_events.jsonl`).
 - Before each iteration, re-read `list_spans` and `list_attempts`.
 - Record every baseline, experiment, audit result, keep/discard decision, and revert in the attempt ledger.
 - If code or config changes are possible, note the starting git state before each attempt and record the post-attempt git state in the ledger.
@@ -387,7 +387,7 @@ The loop is the job. Do not replace it with a summary.
 ## Mandatory external state
 - Start or load a run before doing substantive work.
 - All evidence must be stored as real spans in the active run; do not reason from unrecorded evidence.
-- The run directory is the working memory: `run.json`, `evidence.tsv`, and `attempts.tsv`. Before each iteration, re-read the latest span list and attempt list.
+- The run directory is the working memory: `run.sqlite` plus the JSON/TSV exports (`run.json`, `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, `ledger_events.jsonl`). Before each iteration, re-read the latest span list and attempt list.
 - Record every experiment, patch attempt, audit outcome, and revert decision in the attempt ledger. Negative results are evidence, not noise.
 
 ## Invalid states (must not occur)
@@ -479,7 +479,7 @@ This workflow has two coupled loops: a pre-approval planning loop and a post-app
 ## Mandatory external state
 - Start or load a run before substantive work.
 - All evidence must be stored as real spans in the active run.
-- The run directory is the working memory: `run.json`, `evidence.tsv`, and `attempts.tsv`. Re-read `list_spans` and `list_attempts` before each iteration.
+- The run directory is the working memory: `run.sqlite` plus the JSON/TSV exports (`run.json`, `evidence.tsv`, `attempts.tsv`, `claims.tsv`, `claim_evidence.tsv`, `audits.tsv`, `ledger_events.jsonl`). Re-read `list_spans` and `list_attempts` before each iteration.
 - Record every planning iteration and every execution attempt in the attempt ledger.
 
 ## Invalid states (must not occur)
