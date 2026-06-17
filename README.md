@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/leochlon-hallbayes-badge.png)](https://mseep.ai/app/leochlon-hallbayes)
+
 # Berry
 
 [![CI](https://github.com/leochlon/hallbayes/actions/workflows/ci.yml/badge.svg)](https://github.com/leochlon/hallbayes/actions/workflows/ci.yml)
