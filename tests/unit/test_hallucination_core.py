@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from berry.hallucination_detector.core import run_audit_trace_budget, run_detect_hallucination
+from berry.hallucination_detector.core import (
+    _normalize_spans,
+    run_audit_trace_budget,
+    run_detect_hallucination,
+)
 
 
 def test_detect_missing_citations_fails_without_backend(monkeypatch) -> None:
@@ -81,6 +85,18 @@ def test_audit_trace_budget_fails_closed_without_spans() -> None:
     assert out["details"][0]["status"] == "no_spans"
     assert out["details"][0]["no_spans"] is True
     assert out["summary"]["verifier_calls_planned"] == 0
+
+
+def test_normalize_spans_accepts_id_as_sid_fallback() -> None:
+    # Regression: id-keyed spans normalized to sid="" and were dropped here,
+    # leaving zero spans (status=no_spans) on the detect/audit entry points.
+    assert [(s.sid, s.text) for s in _normalize_spans([{"id": "S0", "text": "x"}])] == [("S0", "x")]
+    # sid still wins when both are present.
+    assert _normalize_spans([{"sid": "S0", "id": "OTHER", "text": "x"}])[0].sid == "S0"
+    # empty sid falls through to id.
+    assert _normalize_spans([{"sid": "", "id": "S0", "text": "x"}])[0].sid == "S0"
+    # neither key -> dropped as before.
+    assert _normalize_spans([{"text": "x"}]) == []
 
 
 def test_audit_trace_budget_uses_consistent_detail_schema(monkeypatch) -> None:

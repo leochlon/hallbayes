@@ -538,6 +538,45 @@ def test_score_trace_budget_accepts_dict_like_trace(monkeypatch) -> None:
     assert backend.batches
 
 
+def test_spans_keyed_by_id_are_accepted_like_sid(monkeypatch) -> None:
+    # Regression: spans keyed by "id" (instead of "sid") used to read as empty,
+    # dropping them from known_ids/context so cited claims fell into
+    # unknown_citations and the verifier never ran. "id" is now a sid fallback.
+    backend = ScriptedBackend(
+        [
+            _text_result(yes=0.97, no=0.01, unsure=0.02, token="YES"),
+            _text_result(yes=0.05, no=0.10, unsure=0.85, token="UNSURE"),
+        ]
+    )
+    monkeypatch.setattr(tb, "make_backend", lambda _cfg: backend)
+
+    [res] = tb.score_trace_budget(
+        trace={
+            "steps": [
+                {"idx": 0, "claim": "The service supports Gemini.", "cites": ["S0"], "confidence": 0.95}
+            ],
+            "spans": [{"id": "S0", "text": "The service supports Gemini."}],
+        },
+        verifier_model="verifier",
+        backend_cfg=BackendConfig(kind="scripted"),
+        context_mode="cited",
+        use_cache=False,
+    )
+
+    assert res.status == "passed"
+    assert res.unknown_citations == []
+    assert res.skipped_verifier is False
+    assert res.verifier_calls > 0
+    assert 'id="S0"' in backend.batches[0][0]
+
+
+def test_span_sid_prefers_sid_over_id(monkeypatch) -> None:
+    assert tb._span_sid({"sid": "S0", "id": "OTHER"}) == "S0"
+    assert tb._span_sid({"id": "S0"}) == "S0"
+    assert tb._span_sid({"sid": "", "id": "S0"}) == "S0"
+    assert tb._span_sid({}) == ""
+
+
 def test_group_claims_false_preserves_single_claim_prompt_shape(monkeypatch) -> None:
     backend = ScriptedBackend(
         [

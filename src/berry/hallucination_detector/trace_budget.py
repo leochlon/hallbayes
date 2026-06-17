@@ -246,9 +246,12 @@ _AUX_Q_RE = re.compile(
 
 
 def _span_sid(span: Any) -> str:
+    # Accept "id" as a fallback for "sid": callers routinely build the spans
+    # array keyed by "id", which previously read as empty and silently dropped
+    # the span from known_ids/context selection (verifier never ran).
     if isinstance(span, dict):
-        return str(span.get("sid", ""))
-    return str(getattr(span, "sid", ""))
+        return str(span.get("sid") or span.get("id") or "")
+    return str(getattr(span, "sid", None) or getattr(span, "id", None) or "")
 
 
 def _field(obj: Any, name: str, default: Any = None) -> Any:
