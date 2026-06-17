@@ -81,7 +81,10 @@ def _normalize_spans(spans: Sequence[Any]) -> List[Span]:
     for raw in spans or []:
         if not isinstance(raw, dict):
             continue
-        sid = str(raw.get("sid", "")).strip()
+        # Accept "id" as a fallback for "sid"; callers routinely key spans by
+        # "id", which otherwise normalizes to an empty sid and gets dropped,
+        # leaving zero spans (status=no_spans, verifier never runs).
+        sid = str(raw.get("sid") or raw.get("id") or "").strip()
         text = str(raw.get("text", "")).strip()
         if not sid or not text:
             continue
